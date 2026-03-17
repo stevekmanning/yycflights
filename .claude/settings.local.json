@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npm install:*)",
+      "WebFetch(domain:tequila.kiwi.com)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node --input-type=module:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(node --no-warnings=ExperimentalWarning --check server/index.js)",
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(python3 -m json.tool)"
+    ]
+  }
+}

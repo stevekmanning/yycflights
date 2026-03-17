@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YYC Flights — Price Tracker</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="plane">&#9992;</span>
+        <span>YYC Flights</span>
+      </div>
+      <div class="header-meta">
+        <span id="env-badge" class="badge badge-test">test mode</span>
+        <span id="last-run" class="muted"></span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── New Alert Form ────────────────────────── -->
+    <section class="card new-alert-card">
+      <h2>Track a new route</h2>
+      <form id="alert-form" autocomplete="off">
+        <div class="form-row">
+          <div class="field">
+            <label for="dest-input">Destination</label>
+            <div class="autocomplete-wrap">
+              <input id="dest-input" type="text" placeholder="City or airport…" required />
+              <ul id="dest-suggestions" class="suggestions" hidden></ul>
+              <input id="dest-iata" type="hidden" required />
+              <input id="dest-label-hidden" type="hidden" required />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row two-col">
+          <div class="field">
+            <label>Trip type</label>
+            <div class="toggle-group" id="trip-type-group" role="group" aria-label="Trip type">
+              <button type="button" class="toggle-btn active" data-value="round">Round trip</button>
+              <button type="button" class="toggle-btn" data-value="oneway">One way</button>
+            </div>
+            <input id="trip-type" type="hidden" value="round" />
+          </div>
+          <div class="field">
+            <label>Stops</label>
+            <div class="toggle-group" id="stops-group" role="group" aria-label="Number of stops">
+              <button type="button" class="toggle-btn active" data-value="0">Any</button>
+              <button type="button" class="toggle-btn" data-value="1">Non-stop</button>
+              <button type="button" class="toggle-btn" data-value="2">&le;1 stop</button>
+              <button type="button" class="toggle-btn" data-value="3">&le;2 stops</button>
+            </div>
+            <input id="stops" type="hidden" value="0" />
+          </div>
+        </div>
+
+        <div class="form-row three-col">
+          <div class="field">
+            <label for="month-start">From month</label>
+            <select id="month-start" required></select>
+          </div>
+          <div class="field">
+            <label for="month-end">To month</label>
+            <select id="month-end" required></select>
+          </div>
+          <div class="field">
+            <label for="threshold">Alert below (CAD $)</label>
+            <input id="threshold" type="number" min="1" step="1" placeholder="500" required />
+          </div>
+        </div>
+
+        <div class="form-row two-col">
+          <div class="field">
+            <label for="email">Email for alerts</label>
+            <input id="email" type="email" placeholder="you@example.com" required />
+          </div>
+          <div class="field">
+            <label for="book-by">Book by <span class="label-optional">(optional)</span></label>
+            <input id="book-by" type="date" />
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save alert &amp; check now</button>
+          <button type="button" id="preview-btn" class="btn btn-ghost" disabled>Preview current prices</button>
+        </div>
+
+        <div id="preview-section" hidden>
+          <div class="preview-header">
+            <span class="preview-title">Current prices for this route</span>
+            <span class="muted preview-hint">Click a price to use it as your threshold</span>
+          </div>
+          <div id="preview-list" class="preview-list"></div>
+        </div>
+
+        <p id="form-error" class="error-msg" hidden></p>
+      </form>
+    </section>
+
+    <!-- ── Cheapest Overall ─────────────────────── -->
+    <section id="cheapest-section" hidden>
+      <h2>Best deal right now</h2>
+      <div id="cheapest-card" class="card best-deal"></div>
+    </section>
+
+    <!-- ── Active Alerts ───────────────────────── -->
+    <section id="alerts-section">
+      <h2>Your alerts</h2>
+      <div id="alerts-grid" class="alerts-grid">
+        <p class="muted empty-msg">No alerts yet — add one above.</p>
+      </div>
+    </section>
+
+    <!-- ── Results Drawer ─────────────────────── -->
+    <div id="results-drawer" class="drawer" hidden>
+      <div class="drawer-header">
+        <h3 id="drawer-title">Flight results</h3>
+        <button id="drawer-close" class="btn-icon" aria-label="Close">&times;</button>
+      </div>
+      <div id="drawer-content"></div>
+    </div>
+    <div id="overlay" class="overlay" hidden></div>
+  </main>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
