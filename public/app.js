@@ -173,10 +173,35 @@ async function loadHealth() {
 }
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
+const ALERT_LIMIT = 5;
+
 async function loadAlerts() {
   const grid = document.getElementById('alerts-grid');
   try {
     const alerts = await api('/api/alerts');
+
+    // Update section heading with count
+    const heading = document.querySelector('#alerts-section h2');
+    if (heading) {
+      heading.innerHTML = alerts.length
+        ? `Your alerts <span class="alert-count">${alerts.length} / ${ALERT_LIMIT}</span>`
+        : 'Your alerts';
+    }
+
+    // Show/hide limit warning banner
+    let banner = document.getElementById('alert-limit-banner');
+    if (alerts.length >= ALERT_LIMIT) {
+      if (!banner) {
+        banner = document.createElement('p');
+        banner.id = 'alert-limit-banner';
+        banner.className = 'alert-limit-msg';
+        grid.parentElement.insertBefore(banner, grid);
+      }
+      banner.textContent = '⚠️ You\'ve reached the 5-alert limit. Delete an alert to add a new one.';
+    } else {
+      banner?.remove();
+    }
+
     if (!alerts.length) {
       grid.innerHTML = '<p class="muted empty-msg">No alerts yet — add one above.</p>';
       return;

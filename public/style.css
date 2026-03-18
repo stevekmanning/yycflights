@@ -455,6 +455,28 @@ select option { background: var(--surface2); }
 .muted     { font-size: .85rem; color: var(--muted); }
 .empty-msg { color: var(--muted); font-style: italic; font-size: .9rem; }
 
+.alert-count {
+  font-size: .72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.alert-limit-msg {
+  font-size: .82rem;
+  color: var(--amber);
+  background: #f59e0b11;
+  border: 1px solid #f59e0b44;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
 /* ══════════════════════════════════════════════════════════
    ALERT CARDS
 ══════════════════════════════════════════════════════════ */

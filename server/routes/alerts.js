@@ -29,6 +29,11 @@ router.get('/', (req, res) => {
 
 // POST /api/alerts
 router.post('/', (req, res) => {
+  const existing = listAlerts(req.userId);
+  if (existing.length >= 5) {
+    return res.status(409).json({ error: 'You can have at most 5 active alerts. Delete one to add a new one.' });
+  }
+
   const parsed = AlertSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
