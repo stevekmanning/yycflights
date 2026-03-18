@@ -6,6 +6,7 @@ import { startScheduler, getSchedulerStatus } from './scheduler.js';
 import alertsRouter from './routes/alerts.js';
 import flightsRouter from './routes/flights.js';
 import destinationsRouter from './routes/destinations.js';
+import digestRouter from './routes/digest.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -18,6 +19,7 @@ app.use(express.static(join(__dirname, '..', 'public')));
 app.use('/api/alerts', alertsRouter);
 app.use('/api/flights', flightsRouter);
 app.use('/api/destinations', destinationsRouter);
+app.use('/api/digest', digestRouter);
 
 // Public config — safe to expose (publishable key only)
 app.get('/api/config', (_req, res) => {

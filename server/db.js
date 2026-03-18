@@ -51,6 +51,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts(active);
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS digest_tokens (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    email        TEXT    NOT NULL UNIQUE,
+    token        TEXT    NOT NULL UNIQUE,
+    unsubscribed INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 // ── Migrations (idempotent — safe on every startup) ───────────────────────────
 try { db.exec(`ALTER TABLE alerts ADD COLUMN book_by   TEXT`);                             } catch { /* already exists */ }
 try { db.exec(`ALTER TABLE alerts ADD COLUMN stops     INTEGER NOT NULL DEFAULT 0`);       } catch { /* already exists */ }
@@ -190,4 +200,71 @@ export function recordNotification(alertId, flightResultId) {
   `).run(alertId, flightResultId);
 }
 
+// ── Weekly digest ─────────────────────────────────────────────────────────────
+
+/** Top N cheapest prices found in the past 7 days across all active alerts */
+export function getWeeklyTopDeals(limit = 8) {
+  return db.prepare(`
+    SELECT
+      MIN(fr.price)    AS price,
+      fr.departure_at,
+      fr.return_at,
+      fr.airline,
+      fr.deep_link,
+      a.dest_label,
+      a.destination
+    FROM flight_results fr
+    JOIN alerts a ON a.id = fr.alert_id
+    WHERE fr.found_at > datetime('now', '-7 days')
+      AND a.active = 1
+    GROUP BY a.destination, date(fr.departure_at)
+    ORDER BY price ASC
+    LIMIT ?
+  `).all(limit);
+}
+
+/** Distinct emails that should receive the digest (active alerts, not unsubscribed) */
+export function getDigestRecipients() {
+  return db.prepare(`
+    SELECT DISTINCT a.email
+    FROM alerts a
+    WHERE a.active = 1
+      AND a.email NOT IN (
+        SELECT email FROM digest_tokens WHERE unsubscribed = 1
+      )
+  `).all();
+}
+
+/** Get or create an unsubscribe token for this email */
+export function upsertDigestToken(email, token) {
+  db.prepare(`
+    INSERT INTO digest_tokens (email, token) VALUES (?, ?)
+    ON CONFLICT(email) DO UPDATE SET token = excluded.token
+  `).run(email, token);
+}
+
+/** Look up a token and return the row */
+export function getDigestToken(token) {
+  return db.prepare(`SELECT * FROM digest_tokens WHERE token = ?`).get(token);
+}
+
+/** Mark an email as unsubscribed */
+export function unsubscribeDigest(email) {
+  db.prepare(`
+    UPDATE digest_tokens SET unsubscribed = 1 WHERE email = ?
+  `).run(email);
+}
+
 export default db;
+
+/** Active alerts + latest price for a specific email — for personal digest summary */
+export function getAlertsForEmail(email) {
+  return db.prepare(`
+    SELECT a.*,
+           (SELECT price FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_price,
+           (SELECT MIN(price) FROM flight_results WHERE alert_id = a.id) AS best_price
+    FROM alerts a
+    WHERE a.active = 1 AND a.email = ?
+    ORDER BY a.created_at DESC
+  `).all(email);
+}
