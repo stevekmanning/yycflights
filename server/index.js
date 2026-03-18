@@ -19,6 +19,14 @@ app.use('/api/alerts', alertsRouter);
 app.use('/api/flights', flightsRouter);
 app.use('/api/destinations', destinationsRouter);
 
+// Public config — safe to expose (publishable key only)
+app.get('/api/config', (_req, res) => {
+  res.json({
+    clerkPublishableKey: process.env.CLERK_PUBLISHABLE_KEY || '',
+    authEnabled: !!process.env.CLERK_SECRET_KEY,
+  });
+});
+
 app.get('/api/health', (_req, res) => {
   const { lastRun, isRunning } = getSchedulerStatus();
   res.json({

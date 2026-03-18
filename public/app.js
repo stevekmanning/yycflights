@@ -1,24 +1,143 @@
-// ── Constants & state ────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 const MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
-
 const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
                       'Jul','Aug','Sep','Oct','Nov','Dec'];
 
-let selectedDest    = null;
-let debounceTimer   = null;
-let previewResults  = [];
+let selectedDest   = null;
+let debounceTimer  = null;
+let previewResults = [];
+let _clerk         = null;
 
-// ── Init ─────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  await initAuth();
+});
+
+async function initAuth() {
+  try {
+    const config = await fetch('/api/config').then(r => r.json());
+
+    if (!config.authEnabled || !config.clerkPublishableKey) {
+      // Dev mode — no Clerk keys, skip auth
+      hideLoading();
+      showApp({ email: 'dev@localhost', firstName: 'Dev' });
+      return;
+    }
+
+    // Load Clerk JS from CDN
+    await loadScript('https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js');
+
+    _clerk = new window.Clerk(config.clerkPublishableKey);
+    await _clerk.load();
+
+    hideLoading();
+
+    if (_clerk.user) {
+      showApp(_clerk.user);
+    } else {
+      showLanding();
+    }
+
+    // React to sign-in / sign-out
+    _clerk.addListener(({ user }) => {
+      if (user) {
+        document.getElementById('landing').hidden = true;
+        showApp(user);
+      } else {
+        document.getElementById('app').hidden = true;
+        showLanding();
+      }
+    });
+  } catch (err) {
+    console.error('Auth init failed:', err);
+    hideLoading();
+    showLanding();
+  }
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload  = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+function hideLoading() {
+  const el = document.getElementById('loading-screen');
+  if (el) el.hidden = true;
+}
+
+// ── Landing ───────────────────────────────────────────────────────────────────
+function showLanding() {
+  document.getElementById('landing').hidden = false;
+  document.getElementById('app').hidden     = true;
+
+  document.getElementById('sign-in-btn').onclick = () => {
+    if (_clerk) _clerk.openSignIn();
+  };
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function showApp(user) {
+  document.getElementById('landing').hidden = false; // keep landing in DOM but hidden
+  document.getElementById('landing').hidden = true;
+  document.getElementById('app').hidden     = false;
+
+  // Set user initials in header
+  const initials = user.firstName
+    ? user.firstName[0].toUpperCase()
+    : (user.primaryEmailAddress?.emailAddress?.[0] || user.email?.[0] || '?').toUpperCase();
+  document.getElementById('user-initials').textContent = initials;
+
+  // Sign out button
+  document.getElementById('user-btn').onclick = async () => {
+    if (_clerk) {
+      await _clerk.signOut();
+    }
+  };
+
+  // Pre-fill email from Clerk user
+  const userEmail = user.primaryEmailAddress?.emailAddress || user.email || '';
+  const emailInput = document.getElementById('email');
+  if (emailInput && userEmail) emailInput.value = userEmail;
+
+  // Boot the app
   populateMonthSelects();
   loadHealth();
   loadAlerts();
   loadCheapest();
   setupForm();
   setupDrawer();
+  setupFormToggle();
+
   setInterval(() => { loadAlerts(); loadCheapest(); loadHealth(); }, 120_000);
-});
+}
+
+// ── Form toggle (collapsible on mobile) ───────────────────────────────────────
+function setupFormToggle() {
+  const toggle = document.getElementById('form-toggle');
+  const body   = document.getElementById('form-body');
+  if (!toggle || !body) return;
+
+  // On tablet+ open by default (CSS handles this via media query class)
+  if (window.innerWidth >= 640) {
+    body.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.classList.add('open');
+  }
+
+  toggle.addEventListener('click', () => {
+    const isOpen = !body.hidden;
+    body.hidden = isOpen;
+    toggle.setAttribute('aria-expanded', String(!isOpen));
+    toggle.classList.toggle('open', !isOpen);
+  });
+}
 
 // ── Month selects ─────────────────────────────────────────────────────────────
 function populateMonthSelects() {
@@ -38,15 +157,11 @@ async function loadHealth() {
     const data  = await api('/api/health');
     const badge = document.getElementById('env-badge');
     if (data.apiReady) {
-      badge.textContent = 'live data';
+      badge.textContent = 'live';
       badge.className   = 'badge badge-production';
     } else {
-      badge.textContent = 'API key missing';
+      badge.textContent = 'no API key';
       badge.className   = 'badge badge-test';
-    }
-    if (data.scheduler?.lastRun) {
-      document.getElementById('last-run').textContent =
-        'Last checked: ' + timeAgo(data.scheduler.lastRun);
     }
   } catch { /* ignore */ }
 }
@@ -97,19 +212,20 @@ function buildAlertCard(alert) {
   card.dataset.id = alert.id;
   card.innerHTML = `
     <div class="active-badge" title="Active"></div>
-    <div>
-      <div class="destination">YYC &rarr; ${alert.dest_label}</div>
-      <div class="route-label">${monthRange} &bull; ${tripLabel} &bull; ${stopsLabel} &bull; Alert below $${threshold} CAD</div>
-      ${alert.book_by ? `<div style="margin-top:6px"><span class="deadline-badge">Book by ${formatDate(alert.book_by)}</span></div>` : ''}
+    <div class="card-top">
+      <div class="destination">YYC → ${alert.dest_label}</div>
+      <div class="route-label">${monthRange} · ${tripLabel} · ${stopsLabel}</div>
+      <div class="route-label">Alert below $${threshold} CAD</div>
+      ${alert.book_by ? `<div class="deadline-row"><span class="deadline-badge">Book by ${formatDate(alert.book_by)}</span></div>` : ''}
     </div>
-    <div>
+    <div class="card-price">
       ${priceDisplay}
-      ${bestPrice && bestPrice !== price ? `<div class="threshold-label">Best ever: $${bestPrice.toFixed(0)} CAD</div>` : ''}
+      ${bestPrice && bestPrice !== price ? `<div class="threshold-label">Best ever: $${bestPrice.toFixed(0)}</div>` : ''}
       <div id="trend-line-${alert.id}" class="trend-line"></div>
       <div id="advice-chip-${alert.id}" class="advice-chip-wrap"></div>
     </div>
     <div class="card-meta">
-      ${alert.last_checked ? 'Checked ' + timeAgo(alert.last_checked) : 'Never checked'} &bull; ${alert.email}
+      ${alert.last_checked ? 'Checked ' + timeAgo(alert.last_checked) : 'Never checked'}
     </div>
     <div class="card-actions">
       <button class="btn btn-sm btn-ghost check-btn"    data-id="${alert.id}">Check now</button>
@@ -189,16 +305,16 @@ async function loadCheapest() {
       : 'One-way';
     card.innerHTML = `
       <div>
-        <div class="bd-price">$${best.price.toFixed(0)} <span style="font-size:1rem;color:var(--muted)">CAD</span></div>
-        <div class="bd-route">YYC &rarr; ${best.dest_label}</div>
+        <div class="bd-price">$${best.price.toFixed(0)} <span class="bd-currency">CAD</span></div>
+        <div class="bd-route">YYC → ${best.dest_label}</div>
       </div>
       <div>
         <div class="bd-meta">Departs: ${dep}</div>
         <div class="bd-meta">Returns: ${ret}</div>
         ${best.airline ? `<div class="bd-meta">Airline: ${best.airline}</div>` : ''}
       </div>
-      <div style="margin-left:auto">
-        <div class="bd-meta" style="margin-bottom:8px">Threshold: $${best.threshold}</div>
+      <div class="bd-actions">
+        <div class="bd-meta">Threshold: $${best.threshold}</div>
         ${best.price < best.threshold ? '<span class="badge badge-production">Below threshold!</span>' : ''}
       </div>
     `;
@@ -212,17 +328,17 @@ const destIata    = document.getElementById('dest-iata');
 const destLabelEl = document.getElementById('dest-label-hidden');
 const suggestions = document.getElementById('dest-suggestions');
 
-destInput.addEventListener('input', () => {
+destInput?.addEventListener('input', () => {
   clearTimeout(debounceTimer);
   const q = destInput.value.trim();
   if (q.length < 2) { hideSuggestions(); selectedDest = null; destIata.value = ''; updatePreviewBtn(); return; }
   debounceTimer = setTimeout(() => fetchSuggestions(q), 250);
 });
-destInput.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
+destInput?.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
 
 async function fetchSuggestions(q) {
   try {
-    const results = await api(`/api/destinations/search?q=${encodeURIComponent(q)}`);
+    const results = await fetch(`/api/destinations/search?q=${encodeURIComponent(q)}`).then(r => r.json());
     renderSuggestions(results);
   } catch { hideSuggestions(); }
 }
@@ -256,18 +372,20 @@ async function fetchPreview() {
   if (!selectedDest) return;
   const monthStart = Number(document.getElementById('month-start').value);
   const monthEnd   = Number(document.getElementById('month-end').value);
+  const stops      = Number(document.getElementById('stops').value);
+  const tripType   = document.getElementById('trip-type').value;
   const section    = document.getElementById('preview-section');
   const list       = document.getElementById('preview-list');
   const btn        = document.getElementById('preview-btn');
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Fetching live prices…';
+  btn.innerHTML = '<span class="spinner"></span> Fetching…';
   section.hidden = false;
   list.innerHTML = '<span class="spinner"></span>';
 
   try {
     const results = await api(
-      `/api/flights/search?dest=${encodeURIComponent(selectedDest.iata)}&monthStart=${monthStart}&monthEnd=${monthEnd}`
+      `/api/flights/search?dest=${encodeURIComponent(selectedDest.iata)}&monthStart=${monthStart}&monthEnd=${monthEnd}&stops=${stops}&tripType=${tripType}`
     );
     previewResults = results;
     renderPreview(results);
@@ -306,7 +424,7 @@ function renderPreview(results) {
   });
 }
 
-// ── Toggle groups (trip type + stops) ─────────────────────────────────────────
+// ── Toggle groups ─────────────────────────────────────────────────────────────
 function setupToggleGroup(groupId, hiddenId) {
   const group = document.getElementById(groupId);
   if (!group) return;
@@ -349,11 +467,17 @@ function setupForm() {
 
     try {
       const alert = await api('/api/alerts', { method: 'POST', body });
+
+      // Reset form
       form.reset();
+      // Restore email
+      if (_clerk?.user) {
+        document.getElementById('email').value =
+          _clerk.user.primaryEmailAddress?.emailAddress || '';
+      }
       selectedDest = null;
       destIata.value = '';
       document.getElementById('preview-section').hidden = true;
-      // Reset toggles to defaults
       document.getElementById('trip-type').value = 'round';
       document.getElementById('stops').value = '0';
       document.querySelectorAll('.toggle-group').forEach(g => {
@@ -366,7 +490,7 @@ function setupForm() {
       showFormError(err.message);
     } finally {
       btn.disabled  = false;
-      btn.innerHTML = 'Save alert &amp; check now';
+      btn.innerHTML = 'Save &amp; check now';
     }
   });
 }
@@ -397,7 +521,7 @@ function closeDrawer() {
 
 // ── History drawer ────────────────────────────────────────────────────────────
 async function openHistory(alertId, label) {
-  openDrawer(`YYC → ${label} — price history`, '<div class="drawer-loading"><span class="spinner"></span> Loading…</div>');
+  openDrawer(`YYC → ${label} — history`, '<div class="drawer-loading"><span class="spinner"></span> Loading…</div>');
   try {
     const results = await api(`/api/flights/results/${alertId}`);
     document.getElementById('drawer-content').innerHTML = '';
@@ -453,7 +577,6 @@ function renderAnalysis(trend, advice, history, alert) {
   const arrowMap  = { rising:'▲', falling:'▼', stable:'→' };
   const trendCls  = { rising:'trend-rising', falling:'trend-falling', stable:'trend-stable' };
 
-  // Advice block
   const adviceHtml = `
     <div class="analysis-advice ${chipClass}-bg">
       <span class="advice-chip ${chipClass}">${labelMap[advice.action]}</span>
@@ -461,33 +584,28 @@ function renderAnalysis(trend, advice, history, alert) {
       ${advice.detail ? `<p class="advice-detail">${advice.detail}</p>` : ''}
     </div>`;
 
-  // Sparkline
   const chartHtml = history.length >= 2
     ? `<div class="chart-wrap">${buildSparkline(history, alert.threshold, advice)}</div>` : '';
 
-  // Stats
   let statsHtml = '';
   if (trend) {
     const rows = [
       ['Trend', `<span class="trend-arrow ${trendCls[trend.direction]}">${arrowMap[trend.direction]} ${trend.direction} $${Math.abs(trend.slopePerDay)}/day</span>`],
       ['Current price', `$${trend.current} CAD`],
-      ['Historical low / avg / high', `<span class="price-below">$${trend.min}</span> / $${trend.avg} / <span class="price-above">$${trend.max}</span>`],
+      ['Low / avg / high', `<span class="price-below">$${trend.min}</span> / $${trend.avg} / <span class="price-above">$${trend.max}</span>`],
       ['Your threshold', `$${alert.threshold} CAD`],
-      ['Data collected', `<span class="muted">${trend.observations} days (${trend.firstDay} → ${trend.lastDay})</span>`],
+      ['Data collected', `<span class="muted">${trend.observations} days</span>`],
     ];
 
     if (advice.daysUntilDeadline !== null)
-      rows.push(['Days to book-by deadline', `<span class="${advice.daysUntilDeadline < 14 ? 'price-near' : ''}">${advice.daysUntilDeadline}d</span>`]);
+      rows.push(['Days to deadline', `<span class="${advice.daysUntilDeadline < 14 ? 'price-near' : ''}">${advice.daysUntilDeadline}d</span>`]);
 
     if (advice.projectedAtDeadline !== null) {
-      const diff   = advice.projectedSavings ?? 0;
-      const cls    = diff > 0 ? 'price-above' : 'price-below';
-      const sign   = diff > 0 ? '+' : '';
-      rows.push(['Projected price at deadline', `<span class="${cls}">~$${advice.projectedAtDeadline} CAD</span> <span class="muted">(${sign}$${diff} vs now)</span>`]);
+      const diff = advice.projectedSavings ?? 0;
+      const cls  = diff > 0 ? 'price-above' : 'price-below';
+      const sign = diff > 0 ? '+' : '';
+      rows.push(['Projected at deadline', `<span class="${cls}">~$${advice.projectedAtDeadline}</span> <span class="muted">(${sign}$${diff})</span>`]);
     }
-
-    if (advice.daysUntilDeparture !== null)
-      rows.push(['Days until departure window', `${advice.daysUntilDeparture}d`]);
 
     if (advice.bookingWindow?.label) {
       const bwClass = { sweet_spot:'price-below', approaching:'', too_early:'muted', late:'price-near', last_minute:'price-above' }[advice.bookingWindow.status] || '';
@@ -506,7 +624,7 @@ function renderAnalysis(trend, advice, history, alert) {
     statsHtml = `
       <div class="analysis-stats">
         <p class="muted" style="font-size:.875rem">
-          Not enough history yet — need at least 2 check-days for trend analysis.<br>
+          Not enough history yet — need at least 2 check-days.<br>
           Click "Check now" to start building history.
         </p>
       </div>`;
@@ -544,8 +662,8 @@ function buildSparkline(history, threshold, advice) {
   const minP   = rawMin - pad;
   const maxP   = rawMax + pad;
 
-  const sx = i  => PX + (i / (prices.length - 1)) * (W - PX * 2);
-  const sy = p  => H - PY - ((p - minP) / (maxP - minP)) * (H - PY * 2);
+  const sx = i => PX + (i / (prices.length - 1)) * (W - PX * 2);
+  const sy = p => H - PY - ((p - minP) / (maxP - minP)) * (H - PY * 2);
 
   const pathD = prices.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(i).toFixed(1)},${sy(p).toFixed(1)}`).join(' ');
   const fillD = `${pathD} L${sx(prices.length - 1).toFixed(1)},${(H - PY).toFixed(1)} L${PX},${(H - PY).toFixed(1)} Z`;
@@ -553,7 +671,6 @@ function buildSparkline(history, threshold, advice) {
   const lastX = sx(prices.length - 1).toFixed(1);
   const lastY = sy(prices[prices.length - 1]).toFixed(1);
 
-  // Projected dashed extension
   let projLine = '';
   if (advice?.projectedAtDeadline && advice.daysUntilDeadline > 0) {
     const projX = Math.min(sx(prices.length - 1) + (W - PX * 2) * 0.22, W - PX);
@@ -583,18 +700,27 @@ function buildSparkline(history, threshold, advice) {
     </svg>`;
 }
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// ── API helper (auto-attaches Clerk token) ────────────────────────────────────
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    method:  opts.method || 'GET',
-    headers: opts.body ? { 'Content-Type': 'application/json' } : {},
-    body:    opts.body ? JSON.stringify(opts.body) : undefined,
+  const headers = {};
+  if (opts.body) headers['Content-Type'] = 'application/json';
+
+  if (_clerk?.session) {
+    const token = await _clerk.session.getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res  = await fetch(path, {
+    method: opts.method || 'GET',
+    headers,
+    body:   opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
 
+// ── Utilities ─────────────────────────────────────────────────────────────────
 function timeAgo(iso) {
   const diff  = Date.now() - new Date(iso).getTime();
   const mins  = Math.floor(diff / 60_000);

@@ -9,7 +9,14 @@
       "Bash(npm uninstall:*)",
       "Bash(node --no-warnings=ExperimentalWarning --check server/index.js)",
       "Bash(curl -s http://localhost:3000/api/health)",
-      "Bash(python3 -m json.tool)"
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s http://localhost:3000/api/alerts)",
+      "Bash(curl -s http://localhost:3000/api/config)",
+      "Bash(curl -s -o /dev/null -w \"GET /  → %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"GET /api/alerts \\(no token\\) → %{http_code}\\\\n\" http://localhost:3000/api/alerts)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

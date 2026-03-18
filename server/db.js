@@ -52,38 +52,44 @@ db.exec(`
 `);
 
 // ── Migrations (idempotent — safe on every startup) ───────────────────────────
-try { db.exec(`ALTER TABLE alerts ADD COLUMN book_by   TEXT`);                          } catch { /* already exists */ }
-try { db.exec(`ALTER TABLE alerts ADD COLUMN stops     INTEGER NOT NULL DEFAULT 0`);    } catch { /* already exists */ }
+try { db.exec(`ALTER TABLE alerts ADD COLUMN book_by   TEXT`);                             } catch { /* already exists */ }
+try { db.exec(`ALTER TABLE alerts ADD COLUMN stops     INTEGER NOT NULL DEFAULT 0`);       } catch { /* already exists */ }
 try { db.exec(`ALTER TABLE alerts ADD COLUMN trip_type TEXT    NOT NULL DEFAULT 'round'`); } catch { /* already exists */ }
+try { db.exec(`ALTER TABLE alerts ADD COLUMN user_id   TEXT`);                             } catch { /* already exists */ }
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
-export function listAlerts() {
+export function listAlerts(userId) {
   return db.prepare(`
     SELECT a.*,
            (SELECT price    FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_price,
            (SELECT found_at FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_found_at,
            (SELECT MIN(price) FROM flight_results WHERE alert_id = a.id) AS best_price
     FROM alerts a
+    WHERE a.user_id = ?
     ORDER BY a.created_at DESC
-  `).all();
+  `).all(userId);
 }
 
-export function getAlert(id) {
+export function getAlert(id, userId = null) {
+  if (userId) {
+    return db.prepare('SELECT * FROM alerts WHERE id = ? AND user_id = ?').get(id, userId);
+  }
   return db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
 }
 
 export function createAlert(data) {
   const stmt = db.prepare(`
-    INSERT INTO alerts (destination, dest_label, month_start, month_end, threshold, email, book_by, stops, trip_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO alerts (destination, dest_label, month_start, month_end, threshold, email, book_by, stops, trip_type, user_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.destination, data.dest_label, data.month_start,
     data.month_end, data.threshold, data.email,
-    data.book_by ?? null,
+    data.book_by  ?? null,
     data.stops    ?? 0,
-    data.trip_type ?? 'round'
+    data.trip_type ?? 'round',
+    data.user_id  ?? null
   );
   return getAlert(Number(result.lastInsertRowid));
 }
@@ -146,7 +152,17 @@ export function getPriceHistory(alertId) {
   `).all(alertId);
 }
 
-export function getCheapestOverall() {
+export function getCheapestOverall(userId = null) {
+  if (userId) {
+    return db.prepare(`
+      SELECT fr.*, a.destination, a.dest_label, a.threshold
+      FROM flight_results fr
+      JOIN alerts a ON a.id = fr.alert_id
+      WHERE a.active = 1 AND a.user_id = ?
+      ORDER BY fr.price ASC
+      LIMIT 1
+    `).get(userId);
+  }
   return db.prepare(`
     SELECT fr.*, a.destination, a.dest_label, a.threshold
     FROM flight_results fr
