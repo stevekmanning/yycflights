@@ -16,65 +16,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function initAuth() {
   try {
-    const config = await fetch('/api/config').then(r => r.json());
+    // Clerk script is injected in <head> by the server — browser starts
+    // downloading it immediately alongside CSS/JS. Just wait for it to be ready.
+    const clerk = await waitForClerk();
 
-    if (!config.authEnabled || !config.clerkPublishableKey) {
-      // Dev mode — no Clerk keys, skip auth
-      hideLoading();
-      showApp({ email: 'dev@localhost', firstName: 'Dev' });
+    if (!clerk) {
+      // No Clerk configured → dev mode, skip auth
+      showApp({ firstName: 'Dev', email: 'dev@localhost' });
       return;
     }
 
-    const pk = config.clerkPublishableKey;
+    await clerk.load();
+    _clerk = clerk;
 
-    // Derive Clerk's Frontend API URL from the publishable key
-    // pk_test_BASE64$ → decode base64 → "domain.clerk.accounts.dev$"
-    const base64Part  = pk.replace(/^pk_(test|live)_/, '');
-    const frontendApi = atob(base64Part).replace(/\$$/, '');
-    const scriptSrc   = `https://${frontendApi}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
+    if (_clerk.user) showApp(_clerk.user);
+    else             showLanding();
 
-    // Load from Clerk's own CDN with data-clerk-publishable-key
-    // This makes window.Clerk an already-configured instance (not a class)
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = scriptSrc;
-      s.dataset.clerkPublishableKey = pk;
-      s.crossOrigin = 'anonymous';
-      s.onload  = resolve;
-      s.onerror = () => reject(new Error(`Failed to load Clerk from ${frontendApi}`));
-      document.head.appendChild(s);
-    });
-
-    await window.Clerk.load();
-    _clerk = window.Clerk;
-
-    hideLoading();
-
-    if (_clerk.user) {
-      showApp(_clerk.user);
-    } else {
-      showLanding();
-    }
-
-    // React to sign-in / sign-out
     _clerk.addListener(({ user }) => {
-      if (user) {
-        document.getElementById('landing').hidden = true;
-        showApp(user);
-      } else {
-        document.getElementById('app').hidden = true;
-        showLanding();
-      }
+      if (user) { document.getElementById('landing').hidden = true; showApp(user); }
+      else      { document.getElementById('app').hidden     = true; showLanding(); }
     });
   } catch (err) {
     console.error('Auth init failed:', err);
-    hideLoading();
     document.getElementById('landing').hidden = false;
     document.getElementById('sign-in-btn').textContent = '⚠️ Error — please refresh';
   }
 }
 
-function hideLoading() { /* no-op — no loading screen */ }
+// Poll for window.Clerk (injected by server into <head>, loads async).
+// Resolves quickly — usually Clerk is ready before DOMContentLoaded fires.
+function waitForClerk(timeout = 6000) {
+  if (window.Clerk) return Promise.resolve(window.Clerk);
+  return new Promise(resolve => {
+    const start = Date.now();
+    const tick  = setInterval(() => {
+      if (window.Clerk) { clearInterval(tick); resolve(window.Clerk); return; }
+      if (Date.now() - start > timeout) { clearInterval(tick); resolve(null); }
+    }, 20);
+  });
+}
 
 // ── Landing ───────────────────────────────────────────────────────────────────
 function showLanding() {
