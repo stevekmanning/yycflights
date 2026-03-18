@@ -29,26 +29,6 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Loading screen ──────────────────────────────────────── */
-.loading-screen {
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.loading-plane {
-  font-size: 2.5rem;
-  animation: float 1.4s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0) rotate(-10deg); }
-  50%       { transform: translateY(-12px) rotate(5deg); }
-}
 
 /* ══════════════════════════════════════════════════════════
    LANDING PAGE
@@ -233,42 +213,8 @@ h3 { font-size: .95rem; font-weight: 600; }
   box-shadow: var(--shadow);
 }
 
-/* ══════════════════════════════════════════════════════════
-   FORM SECTION — collapsible on mobile
-══════════════════════════════════════════════════════════ */
-.form-section { display: flex; flex-direction: column; gap: 0; }
-
-.form-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  font-size: .95rem;
-  font-weight: 600;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: border-color .15s;
-}
-.form-toggle:hover { border-color: var(--accent); }
-
-.form-toggle-arrow {
-  font-size: 1.2rem;
-  color: var(--muted);
-  transition: transform .2s;
-  line-height: 1;
-}
-.form-toggle.open .form-toggle-arrow { transform: rotate(90deg); }
-
-.form-body {
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
-  margin-top: -1px; /* overlap toggle border */
-}
+/* ── Form card ───────────────────────────────────────────── */
+.form-card { margin-bottom: 0; }
 
 /* ── Form fields ─────────────────────────────────────────── */
 .form-row { margin-bottom: 14px; }
@@ -554,25 +500,6 @@ select option { background: var(--surface2); }
 
 .alert-card.loading { opacity: .6; pointer-events: none; }
 
-/* ── Best deal banner ────────────────────────────────────── */
-.best-deal {
-  border-color: var(--green);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.bd-price {
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--green);
-  letter-spacing: -.04em;
-}
-
-.bd-currency { font-size: .9rem; color: var(--muted); font-weight: 400; }
-.bd-route    { font-size: 1rem; font-weight: 600; margin-top: 2px; }
-.bd-meta     { color: var(--muted); font-size: .82rem; }
-.bd-actions  { display: flex; flex-direction: column; gap: 6px; }
 
 /* ── Preview prices ──────────────────────────────────────── */
 .preview-header {
@@ -880,14 +807,6 @@ select option { background: var(--surface2); }
 
   .card { padding: 20px; }
 
-  /* Form always visible — hide toggle */
-  .form-toggle { display: none; }
-  .form-body   {
-    border-radius: var(--radius);
-    margin-top: 0;
-    border-top: 1px solid var(--border);
-  }
-
   /* 2-col grids */
   .two-col   { display: grid; grid-template-columns: 1fr 1fr; }
   .three-col { display: grid; grid-template-columns: 1fr 1fr; }
@@ -901,10 +820,6 @@ select option { background: var(--surface2); }
 
   /* Alert card actions: row */
   .card-actions { display: flex; flex-wrap: wrap; }
-
-  /* Best deal: row */
-  .best-deal { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 20px; }
-  .bd-price  { font-size: 2.4rem; }
 
   /* Preview: wrap chips */
   .preview-list { flex-direction: row; flex-wrap: wrap; }

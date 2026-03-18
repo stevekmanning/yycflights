@@ -74,10 +74,7 @@ async function initAuth() {
   }
 }
 
-function hideLoading() {
-  const el = document.getElementById('loading-screen');
-  if (el) el.hidden = true;
-}
+function hideLoading() { /* no-op — no loading screen */ }
 
 // ── Landing ───────────────────────────────────────────────────────────────────
 function showLanding() {
@@ -102,47 +99,16 @@ function showApp(user) {
 
   // Sign out button
   document.getElementById('user-btn').onclick = async () => {
-    if (_clerk) {
-      await _clerk.signOut();
-    }
+    if (_clerk) await _clerk.signOut();
   };
-
-  // Pre-fill email from Clerk user
-  const userEmail = user.primaryEmailAddress?.emailAddress || user.email || '';
-  const emailInput = document.getElementById('email');
-  if (emailInput && userEmail) emailInput.value = userEmail;
 
   // Boot the app
   populateMonthSelects();
-  loadHealth();
   loadAlerts();
-  loadCheapest();
   setupForm();
   setupDrawer();
-  setupFormToggle();
 
-  setInterval(() => { loadAlerts(); loadCheapest(); loadHealth(); }, 120_000);
-}
-
-// ── Form toggle (collapsible on mobile) ───────────────────────────────────────
-function setupFormToggle() {
-  const toggle = document.getElementById('form-toggle');
-  const body   = document.getElementById('form-body');
-  if (!toggle || !body) return;
-
-  // On tablet+ open by default (CSS handles this via media query class)
-  if (window.innerWidth >= 640) {
-    body.hidden = false;
-    toggle.setAttribute('aria-expanded', 'true');
-    toggle.classList.add('open');
-  }
-
-  toggle.addEventListener('click', () => {
-    const isOpen = !body.hidden;
-    body.hidden = isOpen;
-    toggle.setAttribute('aria-expanded', String(!isOpen));
-    toggle.classList.toggle('open', !isOpen);
-  });
+  setInterval(loadAlerts, 120_000);
 }
 
 // ── Month selects ─────────────────────────────────────────────────────────────
@@ -155,21 +121,6 @@ function populateMonthSelects() {
   });
   startEl.value = 6;
   endEl.value   = 8;
-}
-
-// ── Health ────────────────────────────────────────────────────────────────────
-async function loadHealth() {
-  try {
-    const data  = await api('/api/health');
-    const badge = document.getElementById('env-badge');
-    if (data.apiReady) {
-      badge.textContent = 'live';
-      badge.className   = 'badge badge-production';
-    } else {
-      badge.textContent = 'no API key';
-      badge.className   = 'badge badge-test';
-    }
-  } catch { /* ignore */ }
 }
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
@@ -310,7 +261,6 @@ async function triggerCheck(id) {
   try {
     await api(`/api/alerts/${id}/check`, { method: 'POST' });
     await loadAlerts();
-    await loadCheapest();
   } catch (err) {
     showFormError(err.message);
   }
@@ -320,37 +270,6 @@ async function deleteAlert(id) {
   if (!confirm('Delete this alert?')) return;
   await api(`/api/alerts/${id}`, { method: 'DELETE' });
   await loadAlerts();
-  await loadCheapest();
-}
-
-// ── Cheapest overall ──────────────────────────────────────────────────────────
-async function loadCheapest() {
-  const section = document.getElementById('cheapest-section');
-  const card    = document.getElementById('cheapest-card');
-  try {
-    const best = await api('/api/flights/cheapest');
-    if (!best) { section.hidden = true; return; }
-    const dep = new Date(best.departure_at).toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric' });
-    const ret = best.return_at
-      ? new Date(best.return_at).toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric' })
-      : 'One-way';
-    card.innerHTML = `
-      <div>
-        <div class="bd-price">$${best.price.toFixed(0)} <span class="bd-currency">CAD</span></div>
-        <div class="bd-route">YYC → ${best.dest_label}</div>
-      </div>
-      <div>
-        <div class="bd-meta">Departs: ${dep}</div>
-        <div class="bd-meta">Returns: ${ret}</div>
-        ${best.airline ? `<div class="bd-meta">Airline: ${best.airline}</div>` : ''}
-      </div>
-      <div class="bd-actions">
-        <div class="bd-meta">Threshold: $${best.threshold}</div>
-        ${best.price < best.threshold ? '<span class="badge badge-production">Below threshold!</span>' : ''}
-      </div>
-    `;
-    section.hidden = false;
-  } catch { section.hidden = true; }
 }
 
 // ── Destination autocomplete ──────────────────────────────────────────────────
@@ -480,13 +399,17 @@ function setupForm() {
     hideFormError();
     if (!selectedDest) { showFormError('Please select a destination from the dropdown.'); return; }
 
+    const userEmail = _clerk?.user?.primaryEmailAddress?.emailAddress
+                   || _clerk?.user?.emailAddresses?.[0]?.emailAddress
+                   || 'alerts@yycflights.ca';
+
     const body = {
       destination: selectedDest.iata,
       dest_label:  selectedDest.cityName || selectedDest.name,
       month_start: Number(document.getElementById('month-start').value),
       month_end:   Number(document.getElementById('month-end').value),
       threshold:   Number(document.getElementById('threshold').value),
-      email:       document.getElementById('email').value,
+      email:       userEmail,
       book_by:     document.getElementById('book-by').value || null,
       stops:       Number(document.getElementById('stops').value),
       trip_type:   document.getElementById('trip-type').value,
@@ -501,11 +424,6 @@ function setupForm() {
 
       // Reset form
       form.reset();
-      // Restore email
-      if (_clerk?.user) {
-        document.getElementById('email').value =
-          _clerk.user.primaryEmailAddress?.emailAddress || '';
-      }
       selectedDest = null;
       destIata.value = '';
       document.getElementById('preview-section').hidden = true;
