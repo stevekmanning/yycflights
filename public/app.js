@@ -25,11 +25,28 @@ async function initAuth() {
       return;
     }
 
-    // Load Clerk JS from CDN
-    await loadScript('https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js');
+    const pk = config.clerkPublishableKey;
 
-    _clerk = new window.Clerk(config.clerkPublishableKey);
-    await _clerk.load();
+    // Derive Clerk's Frontend API URL from the publishable key
+    // pk_test_BASE64$ → decode base64 → "domain.clerk.accounts.dev$"
+    const base64Part  = pk.replace(/^pk_(test|live)_/, '');
+    const frontendApi = atob(base64Part).replace(/\$$/, '');
+    const scriptSrc   = `https://${frontendApi}/npm/@clerk/clerk-js@5/dist/clerk.browser.js`;
+
+    // Load from Clerk's own CDN with data-clerk-publishable-key
+    // This makes window.Clerk an already-configured instance (not a class)
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = scriptSrc;
+      s.dataset.clerkPublishableKey = pk;
+      s.crossOrigin = 'anonymous';
+      s.onload  = resolve;
+      s.onerror = () => reject(new Error(`Failed to load Clerk from ${frontendApi}`));
+      document.head.appendChild(s);
+    });
+
+    await window.Clerk.load();
+    _clerk = window.Clerk;
 
     hideLoading();
 
@@ -52,19 +69,9 @@ async function initAuth() {
   } catch (err) {
     console.error('Auth init failed:', err);
     hideLoading();
-    showLanding();
+    document.getElementById('landing').hidden = false;
+    document.getElementById('sign-in-btn').textContent = '⚠️ Error — please refresh';
   }
-}
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload  = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
 }
 
 function hideLoading() {
@@ -84,7 +91,6 @@ function showLanding() {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 function showApp(user) {
-  document.getElementById('landing').hidden = false; // keep landing in DOM but hidden
   document.getElementById('landing').hidden = true;
   document.getElementById('app').hidden     = false;
 
