@@ -210,6 +210,14 @@ main {
   gap: 28px;
 }
 
+.app-tagline {
+  font-size: .95rem;
+  color: var(--muted);
+  text-align: center;
+  margin: -8px 0 -12px;
+  letter-spacing: .01em;
+}
+
 h2 {
   font-size: 1rem;
   font-weight: 600;
