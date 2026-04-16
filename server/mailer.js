@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { fmtLongDate } from './shared/dates.js';
+import { tourLink } from './lib/affiliate.js';
 
 let _client = null;
 
@@ -30,6 +31,23 @@ export async function sendAlert({ alert, result, reason = 'threshold' }) {
            Book now ↗
          </a>
        </p>`
+    : '';
+
+  // Upsell: tours at the destination. Fires at peak excitement — right
+  // when the user sees the deal. GetYourGuide via Travelpayouts (Drive
+  // pixel handles attribution).
+  const tourUrl = tourLink(alert.dest_label);
+  const tourBlock = tourUrl
+    ? `<div style="margin:20px 0 0;padding:16px;background:#0f1117;border:1px solid #2e3250;border-radius:10px">
+         <p style="margin:0 0 6px;font-size:12px;color:#94a3b8;letter-spacing:.05em;text-transform:uppercase">While you're planning</p>
+         <a href="${tourUrl}"
+            style="color:#60a5fa;text-decoration:none;font-weight:600;font-size:15px">
+           🎟️ Top experiences in ${alert.dest_label} →
+         </a>
+         <p style="margin:6px 0 0;font-size:12px;color:#64748b">
+           Skip-the-line tickets, food tours, day trips — book before you go.
+         </p>
+       </div>`
     : '';
 
   const html = `
@@ -77,6 +95,7 @@ export async function sendAlert({ alert, result, reason = 'threshold' }) {
           </table>
 
           ${bookBtn}
+          ${tourBlock}
 
           <p style="margin:24px 0 0;font-size:12px;color:#64748b;border-top:1px solid #2e3250;padding-top:16px">
             YYC Flights price tracker &bull; Alert for ${alert.email}
