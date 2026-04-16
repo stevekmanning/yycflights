@@ -89,13 +89,19 @@ db.exec(`
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
+// One query powers both per-user and scheduler listings — a shared SELECT
+// avoids drift between the two (e.g. missing a column on one side).
+const _LATEST_PRICE_SELECT = `
+  SELECT a.*,
+         (SELECT price    FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_price,
+         (SELECT found_at FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_found_at,
+         (SELECT MIN(price) FROM flight_results WHERE alert_id = a.id) AS best_price
+  FROM alerts a
+`;
+
 export function listAlerts(userId) {
   return db.prepare(`
-    SELECT a.*,
-           (SELECT price    FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_price,
-           (SELECT found_at FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_found_at,
-           (SELECT MIN(price) FROM flight_results WHERE alert_id = a.id) AS best_price
-    FROM alerts a
+    ${_LATEST_PRICE_SELECT}
     WHERE a.user_id = ?
     ORDER BY a.active DESC, a.created_at DESC
   `).all(userId);
@@ -190,17 +196,31 @@ export function getPriceHistory(alertId) {
   `).all(alertId);
 }
 
-// Used by scheduler — fetches all active alerts regardless of user
+// Used by scheduler — fetches all non-expired active alerts regardless of user.
+// Alerts past their book_by date are excluded here (cheap filter); the checker
+// separately flips their active flag via pruneExpiredAlerts() below.
 export function listAllActiveAlerts() {
   return db.prepare(`
-    SELECT a.*,
-           (SELECT price    FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_price,
-           (SELECT found_at FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_found_at,
-           (SELECT MIN(price) FROM flight_results WHERE alert_id = a.id) AS best_price
-    FROM alerts a
+    ${_LATEST_PRICE_SELECT}
     WHERE a.active = 1
+      AND (a.book_by IS NULL OR a.book_by >= date('now'))
     ORDER BY a.created_at DESC
   `).all();
+}
+
+/**
+ * Flip `active = 0` on any alert whose book_by deadline has passed.
+ * Returns the number of rows archived. Idempotent & cheap.
+ */
+export function pruneExpiredAlerts() {
+  const res = db.prepare(`
+    UPDATE alerts
+    SET    active = 0
+    WHERE  active = 1
+      AND  book_by IS NOT NULL
+      AND  book_by < date('now')
+  `).run();
+  return res.changes ?? 0;
 }
 
 // ── Notification dedup ────────────────────────────────────────────────────────
@@ -292,13 +312,52 @@ export function getAlertPriceFloor(alertId, minSamples = 7) {
   `).all(alertId).map(r => r.p);
 
   if (rows.length < minSamples) return null;
-  const idx = Math.max(0, Math.floor(rows.length * 0.10) - 1);
+  // 10th-percentile index, 0-based. With 7 samples: ceil(0.7) - 1 = 0 → the
+  // lowest observation IS the p10, which is the correct answer for tiny n.
+  // With 30 samples: ceil(3) - 1 = 2 → the 3rd-lowest, as expected.
+  const idx = Math.max(0, Math.ceil(rows.length * 0.10) - 1);
   return {
     p10:     Math.round(rows[idx]),
     min:     Math.round(rows[0]),
     median:  Math.round(rows[Math.floor(rows.length / 2)]),
     samples: rows.length,
   };
+}
+
+/**
+ * Bulk-insert flight results inside a single transaction — a 10–50× speedup
+ * over looping `insertResult` when SerpApi returns many offers for one alert.
+ *
+ * @param {number} alertId
+ * @param {Array<Partial<{price, currency, departure_at, return_at, airline, deep_link, raw_json}>>} offers
+ * @returns {Array<number>} inserted row IDs, same order as input.
+ */
+export function insertResultsBulk(alertId, offers) {
+  if (!offers?.length) return [];
+  const stmt = db.prepare(`
+    INSERT INTO flight_results (alert_id, price, currency, departure_at, return_at, airline, deep_link, raw_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const ids = [];
+  const runTxn = db.prepare('BEGIN');
+  const commit = db.prepare('COMMIT');
+  const rollback = db.prepare('ROLLBACK');
+  runTxn.run();
+  try {
+    for (const o of offers) {
+      const r = stmt.run(
+        alertId, o.price, o.currency || 'CAD',
+        o.departure_at, o.return_at ?? null, o.airline ?? null,
+        o.deep_link ?? null, o.raw_json ?? null,
+      );
+      ids.push(Number(r.lastInsertRowid));
+    }
+    commit.run();
+  } catch (err) {
+    try { rollback.run(); } catch { /* ignore */ }
+    throw err;
+  }
+  return ids;
 }
 
 // ── Explore baselines ─────────────────────────────────────────────────────────
@@ -332,16 +391,13 @@ export function listBaselines({ theme = null, maxPrice = null, month = null } = 
   `).all(...params);
 }
 
-export default db;
-
 /** Active alerts + latest price for a specific email — for personal digest summary */
 export function getAlertsForEmail(email) {
   return db.prepare(`
-    SELECT a.*,
-           (SELECT price FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_price,
-           (SELECT MIN(price) FROM flight_results WHERE alert_id = a.id) AS best_price
-    FROM alerts a
+    ${_LATEST_PRICE_SELECT}
     WHERE a.active = 1 AND a.email = ?
     ORDER BY a.created_at DESC
   `).all(email);
 }
+
+export default db;

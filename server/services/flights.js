@@ -1,6 +1,8 @@
 // SerpApi — Google Flights engine
 // Docs: https://serpapi.com/google-flights-api
 
+import { toYmd, parseYmdNoon, addDaysYmd, todayYmd } from '../shared/dates.js';
+
 const SERPAPI_BASE = 'https://serpapi.com/search.json';
 
 // Travelpayouts public airport list — no auth required, used for autocomplete
@@ -12,9 +14,35 @@ function apiKey() {
   return key;
 }
 
-/** Format a Date as YYYY-MM-DD (Google Flights date format). */
-function fmtDate(date) {
-  return date.toISOString().slice(0, 10);
+/**
+ * Fetch with timeout + retry/backoff. Retries on network error and 429/5xx.
+ * Uses AbortSignal.timeout so a stuck connection can't hang a sweep.
+ */
+async function fetchWithRetry(url, { retries = 2, baseDelayMs = 500, timeoutMs = 20_000 } = {}) {
+  let lastErr = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      // Retry on transient server + rate-limit errors only
+      if (res.status === 429 || (res.status >= 500 && res.status <= 599)) {
+        lastErr = new Error(`HTTP ${res.status}`);
+        if (attempt < retries) {
+          const wait = baseDelayMs * Math.pow(2, attempt) + Math.random() * 250;
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+      }
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        const wait = baseDelayMs * Math.pow(2, attempt) + Math.random() * 250;
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+    }
+  }
+  throw lastErr ?? new Error('fetch failed');
 }
 
 /**
@@ -30,15 +58,14 @@ function firstMondayOnOrAfter(date) {
 
 /**
  * Build a list of dates around a target date, ±flexDays inclusive.
- * Skips past dates.
+ * Skips past dates. Timezone-safe (operates on YMD strings, not UTC Dates).
  */
 function flexDates(targetYmd, flexDays = 0) {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const target = new Date(targetYmd + 'T12:00:00');
+  const today = todayYmd();
   const dates = [];
   for (let d = -flexDays; d <= flexDays; d++) {
-    const dt = new Date(target.getTime() + d * 86_400_000);
-    if (dt >= today) dates.push(fmtDate(dt));
+    const candidate = addDaysYmd(targetYmd, d);
+    if (candidate >= today) dates.push(candidate);
   }
   return dates;
 }
@@ -51,6 +78,7 @@ function flexDates(targetYmd, flexDays = 0) {
 function candidateDates(monthStart, monthEnd, yearStart = null, yearEnd = null) {
   const today = new Date();
   const curYear = today.getFullYear();
+  const todayStr = todayYmd();
   const dates = [];
 
   // Build list of { month, year } pairs
@@ -73,8 +101,8 @@ function candidateDates(monthStart, monthEnd, yearStart = null, yearEnd = null) 
     const seeds = [new Date(y, m - 1, 1), new Date(y, m - 1, 13), new Date(y, m - 1, 20)];
     for (const seed of seeds) {
       const d = firstMondayOnOrAfter(seed);
-      const str = fmtDate(d);
-      if (d > today && !dates.includes(str)) dates.push(str);
+      const str = toYmd(d);
+      if (str > todayStr && !dates.includes(str)) dates.push(str);
     }
   }
 
@@ -128,9 +156,7 @@ export async function searchFlights({
   let capturedInsights = null;
 
   for (const departureDate of departures) {
-    const returnDate = fmtDate(
-      new Date(new Date(departureDate).getTime() + 7 * 86_400_000)
-    );
+    const returnDate = addDaysYmd(departureDate, 7);
 
     const params = new URLSearchParams({
       engine:        'google_flights',
@@ -150,7 +176,7 @@ export async function searchFlights({
     if (stops > 0) params.set('stops', String(stops));
 
     try {
-      const res = await fetch(`${SERPAPI_BASE}?${params}`);
+      const res = await fetchWithRetry(`${SERPAPI_BASE}?${params}`);
       if (!res.ok) {
         const msg = await res.text();
         console.warn(`[flights] SerpApi ${res.status} for ${departureDate}: ${msg.slice(0, 120)}`);
@@ -171,11 +197,6 @@ export async function searchFlights({
         const price       = f.price;
         const firstFlight = f.flights?.[0];
         if (!price || !firstFlight) continue;
-
-        // Inbound leg departure time (return journey, first segment)
-        const returnFlight = f.layovers
-          ? null
-          : f.flights?.at(-1);  // best approximation when no layover info
 
         allOffers.push({
           price,

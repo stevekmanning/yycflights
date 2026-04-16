@@ -63,6 +63,13 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// Unknown /api/* paths should 404 as JSON, not return the SPA HTML.
+// (Without this, mistyped API URLs were returning 200 + HTML, which is
+// confusing to debug in DevTools.)
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // SPA fallback — serve pre-rendered HTML for every non-API route
 app.get('*', (_req, res) => {
   res.type('html').send(indexHtml);

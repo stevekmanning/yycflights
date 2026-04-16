@@ -1,16 +1,34 @@
-import { listAllActiveAlerts, insertResult, touchAlertChecked, wasNotifiedRecently, recordNotification, updateAlert, getAlertPriceFloor } from '../db.js';
+import {
+  listAllActiveAlerts, insertResultsBulk, touchAlertChecked,
+  wasNotifiedRecently, recordNotification, getAlertPriceFloor,
+  pruneExpiredAlerts,
+} from '../db.js';
 import { searchFlights } from './flights.js';
 import { sendAlert } from '../mailer.js';
+import { TAX_FACTOR, MANUAL_CHECK_DEBOUNCE_MS } from '../shared/constants.js';
 
-// In-memory debounce: alertId → last manual check timestamp
+// In-memory debounce: alertId → last manual check timestamp.
+// Capped via periodic prune to prevent unbounded growth over long process life.
 const recentManualChecks = new Map();
-const DEBOUNCE_MS = 10 * 60 * 1000; // 10 minutes
+const DEBOUNCE_MS = MANUAL_CHECK_DEBOUNCE_MS;
+let _lastPruneAt = 0;
+
+function pruneManualChecks() {
+  const now = Date.now();
+  if (now - _lastPruneAt < DEBOUNCE_MS) return;
+  _lastPruneAt = now;
+  for (const [id, ts] of recentManualChecks) {
+    if (now - ts > DEBOUNCE_MS) recentManualChecks.delete(id);
+  }
+}
 
 /**
  * Check a single alert: search flights, store results, send email if threshold met.
  * Returns { alert, cheapest, alerted }
  */
 export async function checkOneAlert(alert, { force = false } = {}) {
+  pruneManualChecks();
+
   // Debounce manual checks
   if (!force) {
     const last = recentManualChecks.get(alert.id);
@@ -37,16 +55,14 @@ export async function checkOneAlert(alert, { force = false } = {}) {
     return { alert, cheapest: null, alerted: false, offersFound: 0 };
   }
 
-  // Store all offers, track the cheapest inserted ID
-  let cheapestResultId = null;
-  let cheapestOffer    = offers[0];
+  // Store all offers in one transaction — 10–50× faster than row-by-row.
+  // `offers` is pre-sorted ascending by price, so the first inserted ID is the
+  // cheapest (stable even on ties).
+  const cheapestOffer    = offers[0];
+  const insertedIds      = insertResultsBulk(alert.id, offers);
+  const cheapestResultId = insertedIds[0] ?? null;
 
-  for (const offer of offers) {
-    const id = insertResult({ alert_id: alert.id, ...offer });
-    if (offer === cheapestOffer) cheapestResultId = id;
-  }
-
-  let alerted    = false;
+  let alerted       = false;
   let triggerReason = null; // 'threshold' | 'deal' | null
 
   const mode = alert.alert_mode || 'threshold';
@@ -60,9 +76,8 @@ export async function checkOneAlert(alert, { force = false } = {}) {
     }
   } else {
     // Classic threshold mode (default)
-    // Adjust effective threshold: if user set a base-fare budget, SerpApi returns
-    // all-in price (taxes included), so we gross up by ~15% for comparison.
-    const TAX_FACTOR = 1.15;
+    // Adjust effective threshold: if user set a base-fare budget, SerpApi
+    // returns all-in price (taxes included), so we gross up before comparing.
     const effectiveThreshold = (alert.taxes_included === 0)
       ? alert.threshold * TAX_FACTOR
       : alert.threshold;
@@ -89,21 +104,18 @@ export async function checkOneAlert(alert, { force = false } = {}) {
 
 /**
  * Run checks for all active alerts. Used by the cron scheduler.
- * Returns { checked, alerted }.
+ * Expired alerts are archived in one bulk SQL call before we search anything,
+ * so we don't waste SerpApi credits on trips past their book-by date.
  */
 export async function runAllChecks() {
-  const today  = new Date().toISOString().slice(0, 10);
+  const archived = pruneExpiredAlerts();
+  if (archived > 0) console.log(`[flightChecker] Archived ${archived} expired alert(s)`);
+
   const alerts = listAllActiveAlerts();
   let checked  = 0;
   let alerted  = 0;
 
   for (const alert of alerts) {
-    // Auto-skip expired alerts (book_by date has passed)
-    if (alert.book_by && alert.book_by < today) {
-      console.log(`[flightChecker] Expiring alert ${alert.id} (${alert.dest_label}) — book_by ${alert.book_by} has passed`);
-      updateAlert(alert.id, { active: 0 });
-      continue;
-    }
     try {
       const result = await checkOneAlert(alert, { force: true });
       checked++;
@@ -113,5 +125,5 @@ export async function runAllChecks() {
     }
   }
 
-  return { checked, alerted };
+  return { checked, alerted, archived };
 }

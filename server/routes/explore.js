@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { listBaselines } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { runExploreSweep } from '../services/explore.js';
 
 const router = Router();
@@ -17,8 +17,8 @@ router.get('/', (req, res) => {
   res.json({ results });
 });
 
-// POST /api/explore/sweep — manual trigger for baseline refresh (admin only-ish)
-router.post('/sweep', async (_req, res) => {
+// POST /api/explore/sweep — admin-gated: burns SerpApi quota (37 dests × 6 months).
+router.post('/sweep', requireAdmin, async (_req, res) => {
   try {
     const summary = await runExploreSweep();
     res.json(summary);

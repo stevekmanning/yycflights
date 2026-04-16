@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { fmtLongDate } from './shared/dates.js';
 
 let _client = null;
 
@@ -13,14 +14,8 @@ export async function sendAlert({ alert, result, reason = 'threshold' }) {
     return;
   }
 
-  const depFormatted = new Date(result.departure_at).toLocaleDateString('en-CA', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
-  const retFormatted = result.return_at
-    ? new Date(result.return_at).toLocaleDateString('en-CA', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-      })
-    : 'One-way';
+  const depFormatted = fmtLongDate(result.departure_at);
+  const retFormatted = result.return_at ? fmtLongDate(result.return_at) : 'One-way';
 
   const from    = process.env.ALERT_FROM || 'YYC Flights <onboarding@resend.dev>';
   const isDeal  = reason === 'deal';

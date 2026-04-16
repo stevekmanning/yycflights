@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getDigestToken, unsubscribeDigest } from '../db.js';
 import { sendWeeklyDigest } from '../services/digest.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -21,8 +21,8 @@ router.get('/unsubscribe', (req, res) => {
   res.send(unsubPage('You\'ve been unsubscribed from the weekly digest. You\'ll still receive individual price alerts.'));
 });
 
-// POST /api/digest/send  — admin-only manual trigger (requires auth)
-router.post('/send', requireAuth, async (req, res) => {
+// POST /api/digest/send  — admin-only manual trigger (mass email fan-out)
+router.post('/send', requireAuth, requireAdmin, async (req, res) => {
   try {
     const result = await sendWeeklyDigest();
     res.json(result);

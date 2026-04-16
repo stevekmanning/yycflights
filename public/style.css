@@ -717,8 +717,6 @@ select option { background: var(--surface2); }
 
 .deadline-row { margin-top: 6px; }
 
-.card-price {}
-
 .price-display {
   font-size: 2rem;
   font-weight: 800;
@@ -843,15 +841,6 @@ select option { background: var(--surface2); }
 }
 
 /* ── Price history panel ─────────────────────────────────── */
-.ph-loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: .8rem;
-  color: var(--muted);
-  padding: 12px 0;
-}
-
 .ph-panel {
   margin-top: 14px;
   background: var(--surface2);
@@ -1147,7 +1136,6 @@ select option { background: var(--surface2); }
 .results-table tr:hover td      { background: var(--surface2); }
 
 .price-cell      { font-weight: 700; }
-.below-threshold { color: var(--green); }
 
 .book-link {
   color: var(--accent2);
@@ -1334,7 +1322,6 @@ select option { background: var(--surface2); }
   background: var(--accent);
   color: #fff;
 }
-.tab-panel {}
 .header-right { display: flex; align-items: center; gap: 8px; }
 
 /* ── Flex days + mode groups ─────────────────────────────── */
@@ -1519,7 +1506,9 @@ select option { background: var(--surface2); }
 .explore-actions .btn { flex: 1; }
 
 /* ── Mobile tweaks for top-nav on smaller screens ──────── */
-@media (max-width: 640px) {
+/* Use 639.98px so this block does NOT overlap with `@media (min-width: 640px)`
+   at exactly 640px viewport — avoids sticky+row collisions on form-actions. */
+@media (max-width: 639.98px) {
   .header-inner { flex-wrap: wrap; padding: 10px 14px; }
   .top-nav { order: 3; width: 100%; margin-top: 8px; justify-content: center; }
   .top-nav-btn { flex: 1; min-height: 40px; }

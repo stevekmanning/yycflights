@@ -70,20 +70,36 @@ function nextSixMonths() {
 }
 
 /**
- * Sweep every destination, record the cheapest fare found in the next 6 months.
- * Intended to be called weekly (configurable). Designed to be tolerant of API
- * failures on individual destinations.
+ * Simple fixed-concurrency worker pool. Runs `fn(item)` for each item with at
+ * most `concurrency` in flight at once. Failures on one item don't stop others.
  */
-export async function runExploreSweep({ destinations = SEED_DESTINATIONS, concurrency = 2 } = {}) {
+async function runWithConcurrency(items, concurrency, fn) {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
+/**
+ * Sweep every destination, record the cheapest fare found in the next 6 months.
+ * Runs in parallel with a small concurrency pool — SerpApi is fine with a few
+ * concurrent requests, and this cuts wall-clock from minutes to seconds.
+ */
+export async function runExploreSweep({ destinations = SEED_DESTINATIONS, concurrency = 4 } = {}) {
   const months = nextSixMonths();
   const monthStart = months[0].month;
   const monthEnd   = months[months.length - 1].month;
   const yearStart  = months[0].year;
   const yearEnd    = months[months.length - 1].year;
 
+  const t0 = Date.now();
   let ok = 0, fail = 0;
 
-  for (const dest of destinations) {
+  await runWithConcurrency(destinations, concurrency, async (dest) => {
     try {
       const { results } = await searchFlights({
         destination: dest.iata,
@@ -111,8 +127,9 @@ export async function runExploreSweep({ destinations = SEED_DESTINATIONS, concur
       console.error(`[explore] ${dest.iata} failed:`, err.message);
       fail++;
     }
-  }
+  });
 
-  console.log(`[explore] Sweep done — ${ok} ok, ${fail} skipped/failed`);
-  return { ok, fail };
+  const seconds = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`[explore] Sweep done — ${ok} ok, ${fail} skipped/failed in ${seconds}s`);
+  return { ok, fail, seconds: Number(seconds) };
 }

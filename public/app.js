@@ -62,6 +62,10 @@ function showLanding() {
   document.getElementById('landing').hidden = false;
   document.getElementById('app').hidden     = true;
 
+  // Stop polling after sign-out — otherwise we'd keep hitting /api/alerts
+  // with a revoked token and spamming 401s to the console.
+  if (_alertPollId) { clearInterval(_alertPollId); _alertPollId = null; }
+
   document.getElementById('sign-in-btn').onclick = () => {
     if (_clerk) _clerk.openSignIn();
   };
@@ -99,8 +103,20 @@ function showApp(user) {
   setupDrawer();
   setupHowDrawer();
 
-  setInterval(loadAlerts, 120_000);
+  // Visibility-aware polling: only refresh alerts when tab is visible,
+  // and do a fresh fetch the instant the tab comes back. Saves bandwidth
+  // and stale-token 401s when the app sits in a background tab overnight.
+  if (_alertPollId) clearInterval(_alertPollId);
+  _alertPollId = setInterval(() => {
+    if (document.visibilityState === 'visible') loadAlerts();
+  }, 120_000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') loadAlerts();
+  });
 }
+
+// Module-level handle so sign-out can clear it (prevents 401-spam after logout).
+let _alertPollId = null;
 
 // ── Tabs (Alerts | Explore) ───────────────────────────────────────────────────
 function setupTabs() {
@@ -482,15 +498,17 @@ function selectDest(item) {
   destIata.value    = item.iata;
   destLabelEl.value = item.cityName || item.name;
   hideSuggestions();
-  updatePreviewBtn();
   // Auto-preview as soon as destination is chosen
   setTimeout(fetchPreview, 300);
 }
 
 function hideSuggestions() { suggestions.hidden = true; suggestions.innerHTML = ''; }
-function updatePreviewBtn() { /* preview-btn removed; no-op */ }
 
 // ── Preview prices ────────────────────────────────────────────────────────────
+// Single-flight controller: every new fetchPreview aborts the previous one so
+// rapid toggle-clicks can't leave us with out-of-order results overwriting the
+// latest answer in the UI.
+let _previewController = null;
 async function fetchPreview() {
   if (!selectedDest) return;
   _calendarLoaded = false; // invalidate cached calendar when inputs change
@@ -530,13 +548,18 @@ async function fetchPreview() {
     params.set('yearEnd',    String(yearEnd));
   }
 
+  // Abort any in-flight preview before starting a new one.
+  if (_previewController) _previewController.abort();
+  const ctrl = new AbortController();
+  _previewController = ctrl;
+
   try {
-    const { results, insights } = await api(`/api/flights/search?${params}`);
+    const { results, insights } = await api(`/api/flights/search?${params}`, { signal: ctrl.signal });
+    if (ctrl.signal.aborted) return; // a newer preview superseded us
     previewResults = results;
     renderPreview(results);
 
     // Render price insights from the search response (no second API call needed)
-    const section = document.getElementById('preview-section');
     let panel = document.getElementById('price-history-panel');
     if (!panel) {
       panel = document.createElement('div');
@@ -546,7 +569,10 @@ async function fetchPreview() {
     const cheapestDate = results.length ? (results[0].departure_at?.slice(0, 10) || '') : '';
     renderInsightsPanel(panel, insights, cheapestDate);
   } catch (err) {
+    if (err.name === 'AbortError') return; // stale fetch — ignore silently
     list.innerHTML = `<p class="error-msg">${err.message}</p>`;
+  } finally {
+    if (_previewController === ctrl) _previewController = null;
   }
 }
 
@@ -1157,8 +1183,11 @@ async function api(path, opts = {}) {
     method: opts.method || 'GET',
     headers,
     body:   opts.body ? JSON.stringify(opts.body) : undefined,
+    signal: opts.signal,
   });
-  const data = await res.json();
+  // 204 / empty-body safe parse
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : {};
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }

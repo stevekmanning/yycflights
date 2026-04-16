@@ -73,15 +73,32 @@ export function computeTrend(history) {
 }
 
 /**
- * Days from today until the first of alert.month_start (next occurrence).
- * This estimates when the trip departs so we can apply booking-window heuristics.
+ * Days from today until the alert's likely departure.
+ * Priority: explicit target_date > first day of month_start (next future occurrence).
  */
 function daysUntilDeparture(alert) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Explicit target date takes precedence — cheapest and most accurate signal.
+  if (alert.target_date) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(alert.target_date);
+    if (m) {
+      const dep = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return Math.ceil((dep - today) / 86_400_000);
+    }
+  }
+
   if (!alert.month_start) return null;
-  const today   = new Date();
-  const depYear = alert.month_start <= today.getMonth() + 1
-    ? today.getFullYear() + 1
-    : today.getFullYear();
+
+  // Use year_start when provided (multi-year alerts). Otherwise, pick the next
+  // future occurrence of month_start: if we are AFTER that month in the current
+  // year, roll to next year; otherwise this year still has it ahead of us.
+  const currentMonth = today.getMonth() + 1;
+  const depYear = alert.year_start
+    ? alert.year_start
+    : (alert.month_start < currentMonth ? today.getFullYear() + 1 : today.getFullYear());
+
   const dep = new Date(depYear, alert.month_start - 1, 1);
   return Math.ceil((dep - today) / 86_400_000);
 }

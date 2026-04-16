@@ -6,22 +6,22 @@ import {
   getAlertsForEmail,
   upsertDigestToken,
 } from '../db.js';
+import { SHORT_MONTHS } from '../shared/constants.js';
+import { fmtHumanDate } from '../shared/dates.js';
 
-const resend   = new Resend(process.env.RESEND_API_KEY);
+// Lazy-init — don't crash at import time if RESEND_API_KEY is missing.
+let _resend = null;
+function getResend() {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
+
 const FROM     = process.env.ALERT_FROM || 'onboarding@resend.dev';
 const BASE_URL = process.env.BASE_URL   || 'https://yycflights.ca';
 
-const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
-                      'Jul','Aug','Sep','Oct','Nov','Dec'];
-
-function token() { return randomBytes(20).toString('hex'); }
-function fmtDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric' });
-}
-function monthRange(s, e) {
-  return s === e ? SHORT_MONTHS[s-1] : `${SHORT_MONTHS[s-1]}–${SHORT_MONTHS[e-1]}`;
-}
+function token()            { return randomBytes(20).toString('hex'); }
+function monthRange(s, e)   { return s === e ? SHORT_MONTHS[s-1] : `${SHORT_MONTHS[s-1]}–${SHORT_MONTHS[e-1]}`; }
+const fmtDate = fmtHumanDate; // timezone-safe replacement
 
 function topDealsSection(deals) {
   const rows = deals.map(d => {
@@ -152,7 +152,7 @@ export async function sendWeeklyDigest() {
     const unsubUrl = `${BASE_URL}/api/digest/unsubscribe?token=${tok}`;
     const html     = buildEmail(deals, myAlerts, unsubUrl);
     try {
-      await resend.emails.send({
+      await getResend().emails.send({
         from: FROM, to: email,
         subject: `✈ Best YYC flights this week (${weekLabel})`,
         html,

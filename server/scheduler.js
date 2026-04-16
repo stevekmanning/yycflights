@@ -2,9 +2,30 @@ import cron from 'node-cron';
 import { runAllChecks } from './services/flightChecker.js';
 import { sendWeeklyDigest } from './services/digest.js';
 import { runExploreSweep } from './services/explore.js';
+import db, { pruneExpiredAlerts } from './db.js';
 
 let lastRun = null;
 let isRunning = false;
+
+/**
+ * If the Explore baselines are older than 10 days (e.g. the app was down
+ * during last Monday's cron, or the first-ever boot), run a catch-up sweep
+ * in the background so users aren't staring at an empty Explore tab.
+ */
+function maybeRunCatchupSweep() {
+  try {
+    const row = db.prepare(`
+      SELECT MAX(updated_at) AS latest FROM destination_baselines
+    `).get();
+    const tooOld = !row?.latest || (Date.now() - new Date(row.latest).getTime()) > 10 * 86_400_000;
+    if (tooOld && process.env.SERPAPI_KEY) {
+      console.log('[scheduler] Explore baselines stale/empty — running catch-up sweep in background');
+      runExploreSweep().catch(err => console.error('[scheduler] Catch-up sweep error:', err.message));
+    }
+  } catch (err) {
+    console.error('[scheduler] Catch-up sweep check failed:', err.message);
+  }
+}
 
 export function startScheduler() {
   const schedule = process.env.CRON_SCHEDULE || '0 0 */2 * *';
@@ -23,6 +44,17 @@ export function startScheduler() {
   });
 
   console.log(`[scheduler] Started — running on schedule: ${schedule}`);
+
+  // One-shot: archive any already-expired alerts so they don't appear active.
+  try {
+    const archived = pruneExpiredAlerts();
+    if (archived > 0) console.log(`[scheduler] Archived ${archived} already-expired alert(s) at startup`);
+  } catch (err) {
+    console.error('[scheduler] Expired-prune error:', err.message);
+  }
+
+  // If baselines are stale / missing, kick off a background sweep.
+  maybeRunCatchupSweep();
 
   // Weekly digest — Sunday 15:00 UTC (9am MDT)
   cron.schedule('0 15 * * 0', async () => {
