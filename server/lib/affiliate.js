@@ -43,3 +43,33 @@ export function wrapFlightLink(rawUrl) {
   const encoded = encodeURIComponent(rawUrl);
   return `https://tp.media/r?marker=${TP_MARKER}&u=${encoded}`;
 }
+
+/**
+ * Airport-to-hotel transfer via Kiwitaxi (50% rev-share — highest on network).
+ * Kiwitaxi takes `from` (airport IATA) and resolves destination at their end.
+ * Fires at peak intent in the alert email once the user has dates.
+ */
+export function transferLink(destIata) {
+  if (!destIata) return null;
+  const params = new URLSearchParams({
+    marker: TP_MARKER,
+    from:   destIata,
+  });
+  return `https://kiwitaxi.com/?${params.toString()}`;
+}
+
+/** Travel insurance quote for a trip window via EKTA. ~$10-20/policy. */
+export function insuranceLink(destLabel, depDate, retDate) {
+  const params = new URLSearchParams({ marker: TP_MARKER });
+  if (destLabel) params.set('destination', destLabel);
+  if (depDate)   params.set('start_date',  depDate);
+  if (retDate)   params.set('end_date',    retDate);
+  return `https://ekta.io/?${params.toString()}`;
+}
+
+/** Country/destination eSIM via Airalo. ~10% rev-share, $2-8/sale. */
+export function esimLink(destLabel) {
+  const params = new URLSearchParams({ marker: TP_MARKER });
+  if (destLabel) params.set('q', destLabel);
+  return `https://www.airalo.com/?${params.toString()}`;
+}

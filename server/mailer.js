@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 import { fmtLongDate } from './shared/dates.js';
-import { tourLink } from './lib/affiliate.js';
+import { tourLink, transferLink, insuranceLink, esimLink } from './lib/affiliate.js';
 
 let _client = null;
 
@@ -33,22 +33,40 @@ export async function sendAlert({ alert, result, reason = 'threshold' }) {
        </p>`
     : '';
 
-  // Upsell: tours at the destination. Fires at peak excitement — right
-  // when the user sees the deal. GetYourGuide via Travelpayouts (Drive
-  // pixel handles attribution).
-  const tourUrl = tourLink(alert.dest_label);
-  const tourBlock = tourUrl
-    ? `<div style="margin:20px 0 0;padding:16px;background:#0f1117;border:1px solid #2e3250;border-radius:10px">
-         <p style="margin:0 0 6px;font-size:12px;color:#94a3b8;letter-spacing:.05em;text-transform:uppercase">While you're planning</p>
-         <a href="${tourUrl}"
-            style="color:#60a5fa;text-decoration:none;font-weight:600;font-size:15px">
-           🎟️ Top experiences in ${alert.dest_label} →
-         </a>
-         <p style="margin:6px 0 0;font-size:12px;color:#64748b">
-           Skip-the-line tickets, food tours, day trips — book before you go.
-         </p>
-       </div>`
-    : '';
+  // Trip bundle — peak-intent upsells. Every row is an already-live
+  // Travelpayouts partner. Ordered by per-click revenue (highest first):
+  //   🚗 Kiwitaxi     — 50% rev-share on airport transfers
+  //   🎟️ GetYourGuide — 8-12% commission on tours
+  //   🛡️ EKTA         — $10-20 per insurance policy
+  //   📱 Airalo       — 10% rev-share on eSIMs
+  // Drive pixel handles attribution — no tp.media wrapping needed yet.
+  const tourUrl      = tourLink(alert.dest_label);
+  const transferUrl  = transferLink(alert.destination);
+  const insuranceUrl = insuranceLink(alert.dest_label, result.departure_at, result.return_at);
+  const esimUrl      = esimLink(alert.dest_label);
+
+  const row = (emoji, url, title, sub) => `
+    <tr>
+      <td style="padding:10px 0;border-top:1px solid #2e3250">
+        <a href="${url}" style="color:#e5a656;text-decoration:none;font-weight:600;font-size:14px">
+          ${emoji} ${title} →
+        </a>
+        <div style="font-size:12px;color:#64748b;margin-top:2px">${sub}</div>
+      </td>
+    </tr>`;
+
+  const tripBundle = `
+    <div style="margin:20px 0 0;padding:16px 18px;background:#0f1117;border:1px solid #2e3250;border-radius:10px">
+      <p style="margin:0 0 10px;font-size:12px;color:#94a3b8;letter-spacing:.05em;text-transform:uppercase">Complete your trip</p>
+      <table style="width:100%;border-collapse:collapse">
+        ${transferUrl  ? row('🚗', transferUrl,  `Airport transfer at ${alert.destination}`,     'Pre-book a ride from the airport — no haggling on arrival.') : ''}
+        ${tourUrl      ? row('🎟️', tourUrl,      `Top experiences in ${alert.dest_label}`,     'Skip-the-line tickets, food tours, day trips.') : ''}
+        ${insuranceUrl ? row('🛡️', insuranceUrl, `Trip insurance for ${alert.dest_label}`,     'Cancellations, medical, lost bags — from a few bucks.') : ''}
+        ${esimUrl      ? row('📱', esimUrl,      `eSIM for ${alert.dest_label}`,               'Land connected — no SIM swap, no roaming fees.') : ''}
+      </table>
+    </div>`;
+
+  const tourBlock = tripBundle;
 
   const html = `
     <!DOCTYPE html>

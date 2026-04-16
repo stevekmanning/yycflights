@@ -686,7 +686,10 @@ async function loadExplore() {
       const THEME_ICON = { beach:'🏝', europe:'🗼', asia:'🗾', us:'🇺🇸', canada:'🍁', adventure:'🌋' };
       const icon = THEME_ICON[r.theme] || '✈';
       const date = r.lowest_date ? new Date(r.lowest_date + 'T12:00:00').toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric' }) : '';
-      const tourHref = `https://www.getyourguide.com/s/?q=${encodeURIComponent(r.dest_label)}&partner_id=${TP_MARKER}`;
+      const qLabel = encodeURIComponent(r.dest_label);
+      const tourHref     = `https://www.getyourguide.com/s/?q=${qLabel}&partner_id=${TP_MARKER}`;
+      const transferHref = `https://kiwitaxi.com/?marker=${TP_MARKER}&from=${encodeURIComponent(r.iata)}`;
+      const esimHref     = `https://www.airalo.com/?marker=${TP_MARKER}&q=${qLabel}`;
       return `
         <div class="explore-card-item">
           <div class="explore-card-top">
@@ -699,9 +702,11 @@ async function loadExplore() {
             ${r.deep_link ? `<a class="btn btn-sm btn-ghost" href="${r.deep_link}" target="_blank" rel="noopener noreferrer">Book ↗</a>` : ''}
             <button class="btn btn-sm btn-primary explore-watch-btn" data-iata="${r.iata}" data-label="${r.dest_label}" data-date="${r.lowest_date || ''}">Watch route</button>
           </div>
-          <a class="explore-tour-link" href="${tourHref}" target="_blank" rel="noopener noreferrer">
-            🎟️ Things to do in ${r.dest_label} →
-          </a>
+          <div class="explore-upsells">
+            <a class="explore-upsell" href="${tourHref}" target="_blank" rel="noopener noreferrer">🎟️ Things to do</a>
+            <a class="explore-upsell" href="${transferHref}" target="_blank" rel="noopener noreferrer">🚗 Airport ride</a>
+            <a class="explore-upsell" href="${esimHref}" target="_blank" rel="noopener noreferrer">📱 eSIM</a>
+          </div>
         </div>
       `;
     }).join('');

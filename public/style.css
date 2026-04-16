@@ -1709,24 +1709,33 @@ select option { background: var(--surface2); }
 .explore-actions { display: flex; gap: 6px; margin-top: 6px; }
 .explore-actions .btn { flex: 1; }
 
-/* Secondary affiliate link — sits below the primary actions, low-visual-weight.
-   Monetizes browsing intent: a user eyeing the destination might book a tour
-   even if the flight isn't right yet. Warm amber tone matches brand accent. */
-.explore-tour-link {
-  display: block;
+/* Secondary affiliate strip — three low-weight CTAs that monetize browsing
+   intent. A user eyeing the destination might book a tour, transfer, or
+   eSIM even if the flight itself isn't right yet. Warm amber tone matches
+   brand accent so it reads as "part of the trip," not ads. */
+.explore-upsells {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
   margin-top: 8px;
-  padding: 8px 10px;
+}
+.explore-upsell {
+  display: block;
+  padding: 7px 6px;
   border-radius: 8px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: .78rem;
+  font-size: .72rem;
   font-weight: 500;
   text-decoration: none;
   text-align: center;
   transition: background .15s ease, color .15s ease, border-color .15s ease;
   border: 1px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.explore-tour-link:hover {
+.explore-upsell:hover {
   background: rgba(229,166,86,.18);
   color: var(--accent2);
   border-color: var(--accent-soft);
