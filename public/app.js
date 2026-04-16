@@ -936,39 +936,61 @@ function setupForm() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Saving…';
 
-    try {
-      const alert = await api('/api/alerts', { method: 'POST', body });
+    // Helper: reset the Save button
+    const resetBtn = () => { btn.disabled = false; btn.innerHTML = 'Save alert'; };
 
-      // Reset form
-      form.reset();
-      selectedDest = null;
-      destIata.value = '';
-      document.getElementById('preview-section').hidden = true;
-      document.getElementById('trip-type').value = 'round';
-      document.getElementById('stops').value = '0';
-      document.getElementById('taxes-included').value = '1';
-      document.getElementById('date-mode').value  = 'target';
-      document.getElementById('flex-days').value  = '0';
-      document.getElementById('alert-mode').value = 'threshold';
-      document.getElementById('target-date').value = '';
-      document.getElementById('target-date-label').textContent = 'Pick target date';
-      document.getElementById('target-date-wrap').hidden = false;
-      document.getElementById('window-wrap').hidden      = true;
-      document.getElementById('threshold-wrap').hidden    = false;
-      document.getElementById('deal-watcher-wrap').hidden = true;
-      document.querySelectorAll('.toggle-group').forEach(g => {
-        g.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+    let alert;
+    try {
+      // Cap the save at 20s. If the server takes longer we abort rather
+      // than letting the UI hang forever.
+      alert = await api('/api/alerts', {
+        method: 'POST',
+        body,
+        signal: AbortSignal.timeout(20_000),
       });
-      document.getElementById('taxes-group')?.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
-      previewResults = [];
-      _calendarLoaded = false;
-      await triggerCheck(alert.id);
     } catch (err) {
-      showFormError(err.message);
-    } finally {
-      btn.disabled  = false;
-      btn.innerHTML = 'Save alert';
+      showFormError(err.name === 'TimeoutError'
+        ? 'Save timed out. Check your connection and try again.'
+        : (err.message || 'Could not save alert.'));
+      resetBtn();
+      return;
     }
+
+    // Reset form
+    form.reset();
+    selectedDest = null;
+    destIata.value = '';
+    document.getElementById('preview-section').hidden = true;
+    document.getElementById('trip-type').value = 'round';
+    document.getElementById('stops').value = '0';
+    document.getElementById('taxes-included').value = '1';
+    document.getElementById('date-mode').value  = 'target';
+    document.getElementById('flex-days').value  = '0';
+    document.getElementById('alert-mode').value = 'threshold';
+    document.getElementById('target-date').value = '';
+    document.getElementById('target-date-label').textContent = 'Pick target date';
+    document.getElementById('target-date-wrap').hidden = false;
+    document.getElementById('window-wrap').hidden      = true;
+    document.getElementById('threshold-wrap').hidden    = false;
+    document.getElementById('deal-watcher-wrap').hidden = true;
+    document.querySelectorAll('.toggle-group').forEach(g => {
+      g.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+    });
+    document.getElementById('taxes-group')?.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+    previewResults = [];
+    _calendarLoaded = false;
+
+    // Reset the button NOW — the alert is already saved. The initial price
+    // check is kicked off in the background so the UI isn't blocked waiting
+    // for a 10-30s SerpApi search that can hang on flaky mobile networks.
+    resetBtn();
+
+    // Show the new card immediately (will display "checking…" spinner until
+    // the background check populates the price).
+    try { await loadAlerts(); } catch {}
+
+    // Fire-and-forget: populates the price when SerpApi responds.
+    triggerCheck(alert.id).catch(err => console.warn('[initial check]', err));
   });
 }
 
