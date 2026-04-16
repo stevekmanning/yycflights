@@ -4,10 +4,11 @@ const MONTHS = ['January','February','March','April','May','June',
 const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
                       'Jul','Aug','Sep','Oct','Nov','Dec'];
 
-let selectedDest   = null;
-let debounceTimer  = null;
-let previewResults = [];
-let _clerk         = null;
+let selectedDest    = null;
+let debounceTimer   = null;
+let previewResults  = [];
+let _clerk          = null;
+let _appInitialized = false; // guard against Clerk listener firing showApp multiple times
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -71,18 +72,21 @@ function showApp(user) {
   document.getElementById('landing').hidden = true;
   document.getElementById('app').hidden     = false;
 
-  // Set user initials in header
+  // Always update the user avatar (safe to call repeatedly)
   const initials = user.firstName
     ? user.firstName[0].toUpperCase()
     : (user.primaryEmailAddress?.emailAddress?.[0] || user.email?.[0] || '?').toUpperCase();
   document.getElementById('user-initials').textContent = initials;
-
-  // Sign out button
   document.getElementById('user-btn').onclick = async () => {
     if (_clerk) await _clerk.signOut();
   };
 
-  // Boot the app
+  // Guard: only set up event listeners and intervals once.
+  // Clerk's addListener fires on every auth state change (token refresh, etc.)
+  // which would stack duplicate submit listeners → duplicate alert creation.
+  if (_appInitialized) return;
+  _appInitialized = true;
+
   populateMonthSelects();
   setupBookByPicker();
   loadAlerts();
