@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getResults, getCheapestOverall, getAlert } from '../db.js';
-import { searchFlights } from '../services/flights.js';
+import { searchFlights, fetchPriceInsights } from '../services/flights.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -38,6 +38,19 @@ router.get('/results/:alertId', (req, res) => {
   }
   const limit = Number(req.query.limit) || 50;
   res.json(getResults(alertId, limit));
+});
+
+// GET /api/flights/insights?dest=YVR&date=2026-06-02&tripType=round
+// Returns Google Flights price_insights for a specific route/date (60-day history, price level, typical range)
+router.get('/insights', async (req, res) => {
+  const { dest, date, tripType } = req.query;
+  if (!dest || !date) return res.status(400).json({ error: 'dest and date required' });
+  try {
+    const insights = await fetchPriceInsights({ destination: dest.toUpperCase(), date, tripType: tripType || 'round' });
+    res.json(insights || {});
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
 });
 
 // GET /api/flights/cheapest

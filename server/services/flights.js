@@ -150,6 +150,37 @@ export async function searchFlights({ destination, monthStart = 1, monthEnd = 12
   return allOffers.sort((a, b) => a.price - b.price);
 }
 
+/**
+ * Fetch Google Flights price_insights for a specific route + departure date.
+ * Returns: { lowest_price, price_level, typical_price_range, price_history }
+ * price_history: [[unix_seconds, price_cad], ...] — ~60 days of history
+ */
+export async function fetchPriceInsights({ destination, date, tripType = 'round' }) {
+  const origin   = process.env.ORIGIN || 'YYC';
+  const isOneWay = tripType === 'oneway';
+
+  const params = new URLSearchParams({
+    engine:        'google_flights',
+    departure_id:  origin,
+    arrival_id:    destination,
+    outbound_date: date,
+    type:          isOneWay ? '2' : '1',
+    currency:      'CAD',
+    hl:            'en',
+    api_key:       apiKey(),
+  });
+
+  if (!isOneWay) {
+    const returnDate = fmtDate(new Date(new Date(date).getTime() + 7 * 86_400_000));
+    params.set('return_date', returnDate);
+  }
+
+  const res  = await fetch(`${SERPAPI_BASE}?${params}`);
+  if (!res.ok) throw new Error(`SerpApi ${res.status}`);
+  const json = await res.json();
+  return json.price_insights || null;
+}
+
 // ---------------------------------------------------------------------------
 // Airport autocomplete — free public Travelpayouts data (no key needed)
 // Joins airports + cities so searching "rome" finds FCO/CIA correctly.

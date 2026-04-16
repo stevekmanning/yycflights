@@ -821,6 +821,92 @@ select option { background: var(--surface2); }
   vertical-align: middle;
 }
 
+/* ── Price history panel ─────────────────────────────────── */
+.ph-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .8rem;
+  color: var(--muted);
+  padding: 12px 0;
+}
+
+.ph-panel {
+  margin-top: 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px 12px;
+}
+
+.ph-header { margin-bottom: 12px; }
+
+.ph-title {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 4px;
+}
+
+.ph-level {
+  font-size: .92rem;
+  font-weight: 600;
+}
+.ph-level-low     { color: var(--green); }
+.ph-level-typical { color: var(--amber); }
+.ph-level-high    { color: var(--red); }
+
+/* Gauge */
+.ph-gauge-wrap { margin-bottom: 14px; }
+
+.ph-gauge-track {
+  position: relative;
+  height: 6px;
+  background: linear-gradient(to right, var(--green) 0%, var(--amber) 50%, var(--red) 100%);
+  border-radius: 3px;
+  margin-bottom: 6px;
+}
+
+.ph-gauge-fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(0,0,0,.25);
+  border-radius: 3px 0 0 3px;
+}
+
+.ph-gauge-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.3);
+}
+
+.ph-gauge-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+.ph-gauge-hint {
+  text-align: center;
+  font-size: .68rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Sparkline */
+.ph-chart-wrap { margin: 0 -4px; }
+.ph-sparkline  { width: 100%; height: auto; display: block; overflow: visible; }
+
 /* ── Trend & advice ──────────────────────────────────────── */
 .trend-line {
   font-size: .78rem;

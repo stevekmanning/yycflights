@@ -372,6 +372,13 @@ async function fetchPreview() {
     );
     previewResults = results;
     renderPreview(results);
+
+    // Fetch price history for the cheapest result's departure date
+    if (results.length) {
+      const cheapest  = results[0];
+      const depDate   = cheapest.departure_at?.slice(0, 10) || '';
+      if (depDate) fetchAndRenderInsights(selectedDest.iata, depDate, tripType);
+    }
   } catch (err) {
     list.innerHTML = `<p class="error-msg">${err.message}</p>`;
   }
@@ -421,6 +428,112 @@ function renderPreview(results) {
 }
 
 const TAX_FACTOR = 1.15; // approximate tax multiplier for display adjustment
+
+// ── Price insights (60-day history from Google Flights) ───────────────────────
+async function fetchAndRenderInsights(dest, date, tripType) {
+  // Insert a loading placeholder below the chips
+  const section = document.getElementById('preview-section');
+  let panel = document.getElementById('price-history-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'price-history-panel';
+    section.appendChild(panel);
+  }
+  panel.innerHTML = '<div class="ph-loading"><span class="spinner"></span> Loading price history…</div>';
+
+  try {
+    const ins = await api(`/api/flights/insights?dest=${encodeURIComponent(dest)}&date=${encodeURIComponent(date)}&tripType=${encodeURIComponent(tripType)}`);
+    renderInsightsPanel(panel, ins, date);
+  } catch {
+    panel.innerHTML = ''; // silently hide if insights unavailable
+  }
+}
+
+function renderInsightsPanel(panel, ins, date) {
+  if (!ins || !ins.price_history?.length) { panel.innerHTML = ''; return; }
+
+  const history = ins.price_history; // [[unix_sec, price], ...]
+  const prices  = history.map(h => h[1]);
+  const low     = ins.typical_price_range?.[0] ?? Math.min(...prices);
+  const high    = ins.typical_price_range?.[1] ?? Math.max(...prices);
+  const current = prices[prices.length - 1];
+  const level   = ins.price_level || 'typical';
+
+  const levelLabel = { low: '🟢 Low', typical: '🟡 Typical', high: '🔴 High' }[level] || level;
+  const levelClass = { low: 'ph-level-low', typical: 'ph-level-typical', high: 'ph-level-high' }[level] || '';
+
+  // Gauge: position current price along low→high range
+  const pct = Math.min(100, Math.max(0, ((current - low) / (high - low || 1)) * 100));
+
+  // Build 60-day sparkline
+  const chart = buildInsightsSparkline(history, low, high, current);
+
+  const depFormatted = new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  panel.innerHTML = `
+    <div class="ph-panel">
+      <div class="ph-header">
+        <div>
+          <div class="ph-title">Price history · <span class="muted">departing ${depFormatted}</span></div>
+          <div class="ph-level ${levelClass}">${levelLabel} — $${current} CAD is ${level} for this route</div>
+        </div>
+      </div>
+      <div class="ph-gauge-wrap">
+        <div class="ph-gauge-track">
+          <div class="ph-gauge-fill" style="left:0;width:${pct}%"></div>
+          <div class="ph-gauge-dot" style="left:${pct}%"></div>
+        </div>
+        <div class="ph-gauge-labels">
+          <span class="ph-gauge-lo">$${low}</span>
+          <span class="ph-gauge-hi">$${high}</span>
+        </div>
+        <div class="ph-gauge-hint">typical range</div>
+      </div>
+      <div class="ph-chart-wrap">${chart}</div>
+    </div>
+  `;
+}
+
+function buildInsightsSparkline(history, low, high, current) {
+  const W = 480, H = 100, PX = 8, PY = 20;
+  const prices = history.map(h => h[1]);
+  const pad    = (Math.max(...prices) - Math.min(...prices)) * 0.18 || 15;
+  const minP   = Math.min(...prices) - pad;
+  const maxP   = Math.max(...prices) + pad;
+
+  const sx = i => PX + (i / (prices.length - 1)) * (W - PX * 2);
+  const sy = p => H - PY - ((p - minP) / (maxP - minP)) * (H - PY * 2);
+
+  const pathD = prices.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(i).toFixed(1)},${sy(p).toFixed(1)}`).join(' ');
+  const fillD = `${pathD} L${sx(prices.length-1).toFixed(1)},${(H-PY).toFixed(1)} L${PX},${(H-PY).toFixed(1)} Z`;
+
+  // Low / high range band
+  const bandTop    = sy(high).toFixed(1);
+  const bandHeight = (sy(low) - sy(high)).toFixed(1);
+
+  const lastX = sx(prices.length - 1).toFixed(1);
+  const lastY = sy(current).toFixed(1);
+
+  // Label every ~2 weeks
+  const labelIdxs = [0, Math.floor(prices.length * 0.33), Math.floor(prices.length * 0.67), prices.length - 1];
+  const labels = labelIdxs.map(i => {
+    const ts  = history[i][0] * 1000;
+    const lbl = new Date(ts).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+    return `<text x="${sx(i).toFixed(1)}" y="${H}" font-size="9" fill="var(--muted)" text-anchor="middle">${lbl}</text>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" class="ph-sparkline" role="img" aria-label="60-day price history">
+      <rect x="${PX}" y="${bandTop}" width="${W - PX*2}" height="${bandHeight}"
+            fill="var(--accent)" opacity="0.07" rx="2"/>
+      <path d="${fillD}" fill="var(--accent)" opacity="0.08"/>
+      <path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="2"
+            stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${lastX}" cy="${lastY}" r="5" fill="var(--accent)"/>
+      <circle cx="${lastX}" cy="${lastY}" r="9" fill="var(--accent)" opacity="0.2"/>
+      ${labels}
+    </svg>`;
+}
 
 // ── Toggle groups ─────────────────────────────────────────────────────────────
 function setupToggleGroup(groupId, hiddenId, onChange) {
