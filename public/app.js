@@ -135,16 +135,14 @@ function setupTabs() {
 // ── Target-date picker ───────────────────────────────────────────────────────
 function setupTargetDatePicker() {
   const input = document.getElementById('target-date');
-  const btn   = document.getElementById('target-date-btn');
   const label = document.getElementById('target-date-label');
 
-  // Default min = today
-  input.min = new Date().toISOString().slice(0, 10);
+  // Default min = today (local date, not UTC — avoid TZ off-by-one)
+  const now = new Date();
+  input.min = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  btn.addEventListener('click', () => {
-    try { input.showPicker(); } catch { input.click(); }
-  });
-
+  // Input is a transparent overlay on top of the visible button; native
+  // tap opens the OS date picker directly (most reliable on iOS Safari).
   input.addEventListener('change', () => {
     if (input.value) {
       label.textContent = formatDate(input.value);
@@ -223,27 +221,22 @@ function populateMonthSelects() {
 // ── Book-by calendar picker ───────────────────────────────────────────────────
 function setupBookByPicker() {
   const input    = document.getElementById('book-by');
-  const btn      = document.getElementById('book-by-btn');
   const clearBtn = document.getElementById('book-by-clear');
   const label    = document.getElementById('book-by-label');
-
-  btn.addEventListener('click', () => {
-    try { input.showPicker(); } catch { input.click(); }
-  });
 
   input.addEventListener('change', () => {
     if (input.value) {
       label.textContent   = formatDate(input.value);
       clearBtn.hidden     = false;
     } else {
-      label.textContent   = 'No deadline';
+      label.textContent   = 'No deadline set';
       clearBtn.hidden     = true;
     }
   });
 
   clearBtn.addEventListener('click', () => {
     input.value         = '';
-    label.textContent   = 'No deadline';
+    label.textContent   = 'No deadline set';
     clearBtn.hidden     = true;
   });
 }
