@@ -89,12 +89,91 @@ function showApp(user) {
 
   populateMonthSelects();
   setupBookByPicker();
+  setupTargetDatePicker();
+  setupDateModeToggle();
+  setupAlertModeToggle();
+  setupPreviewViewToggle();
+  setupTabs();
   loadAlerts();
   setupForm();
   setupDrawer();
   setupHowDrawer();
 
   setInterval(loadAlerts, 120_000);
+}
+
+// ── Tabs (Alerts | Explore) ───────────────────────────────────────────────────
+function setupTabs() {
+  document.querySelectorAll('.top-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.top-nav-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      document.getElementById('tab-alerts').hidden  = tab !== 'alerts';
+      document.getElementById('tab-explore').hidden = tab !== 'explore';
+      if (tab === 'explore') loadExplore();
+    });
+  });
+}
+
+// ── Target-date picker ───────────────────────────────────────────────────────
+function setupTargetDatePicker() {
+  const input = document.getElementById('target-date');
+  const btn   = document.getElementById('target-date-btn');
+  const label = document.getElementById('target-date-label');
+
+  // Default min = today
+  input.min = new Date().toISOString().slice(0, 10);
+
+  btn.addEventListener('click', () => {
+    try { input.showPicker(); } catch { input.click(); }
+  });
+
+  input.addEventListener('change', () => {
+    if (input.value) {
+      label.textContent = formatDate(input.value);
+      if (selectedDest) setTimeout(fetchPreview, 200);
+    } else {
+      label.textContent = 'Pick target date';
+    }
+  });
+}
+
+// ── Date mode toggle (target vs window) ───────────────────────────────────────
+function setupDateModeToggle() {
+  setupToggleGroup('date-mode-group', 'date-mode', (val) => {
+    document.getElementById('target-date-wrap').hidden = val !== 'target';
+    document.getElementById('window-wrap').hidden      = val !== 'window';
+    if (selectedDest) setTimeout(fetchPreview, 200);
+  });
+  setupToggleGroup('flex-group', 'flex-days', () => { if (selectedDest) setTimeout(fetchPreview, 200); });
+}
+
+// ── Alert mode toggle (threshold vs deal watcher) ─────────────────────────────
+function setupAlertModeToggle() {
+  setupToggleGroup('mode-group', 'alert-mode', (val) => {
+    document.getElementById('threshold-wrap').hidden    = val !== 'threshold';
+    document.getElementById('deal-watcher-wrap').hidden = val !== 'deal';
+    document.getElementById('threshold').required       = val === 'threshold';
+  });
+  // Default: threshold required
+  document.getElementById('threshold').required = true;
+}
+
+// ── Preview view toggle (list vs calendar) ────────────────────────────────────
+let _calendarLoaded = false;
+function setupPreviewViewToggle() {
+  const buttons = document.querySelectorAll('.preview-view-btn');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const view = btn.dataset.view;
+      document.getElementById('preview-list').hidden     = view !== 'list';
+      document.getElementById('preview-calendar').hidden = view !== 'calendar';
+      if (view === 'calendar' && !_calendarLoaded && selectedDest) loadCalendarView();
+    });
+  });
 }
 
 // ── Month selects ─────────────────────────────────────────────────────────────
@@ -161,17 +240,19 @@ async function loadAlerts() {
   try {
     const alerts = await api('/api/alerts');
 
+    const activeCount = alerts.filter(a => a.active !== 0).length;
+
     // Update section heading with count
     const heading = document.querySelector('#alerts-section h2');
     if (heading) {
-      heading.innerHTML = alerts.length
-        ? `Your alerts <span class="alert-count">${alerts.length} / ${ALERT_LIMIT}</span>`
+      heading.innerHTML = activeCount
+        ? `Your alerts <span class="alert-count">${activeCount} / ${ALERT_LIMIT}</span>`
         : 'Your alerts';
     }
 
     // Show/hide limit warning banner
     let banner = document.getElementById('alert-limit-banner');
-    if (alerts.length >= ALERT_LIMIT) {
+    if (activeCount >= ALERT_LIMIT) {
       if (!banner) {
         banner = document.createElement('p');
         banner.id = 'alert-limit-banner';
@@ -211,56 +292,88 @@ function buildAlertCard(alert) {
     ? `<span class="price-display ${priceClass}">$${price.toFixed(0)}</span><span class="muted"> CAD</span>`
     : `<span class="price-display price-unknown">Not yet checked</span>`;
 
-  const monthRange = alert.month_start === alert.month_end
-    ? SHORT_MONTHS[alert.month_start - 1]
-    : `${SHORT_MONTHS[alert.month_start - 1]} – ${SHORT_MONTHS[alert.month_end - 1]}`;
 
   const STOPS_LABEL = { 0: 'Any stops', 1: 'Non-stop', 2: '≤1 stop', 3: '≤2 stops' };
   const stopsLabel  = STOPS_LABEL[alert.stops ?? 0] ?? 'Any stops';
   const tripLabel   = alert.trip_type === 'oneway' ? 'One way' : 'Round trip';
   const priceLabel  = alert.taxes_included === 0 ? 'base fare' : 'all-in';
+  const isDealMode  = alert.alert_mode === 'deal';
+  const flexLabel   = alert.flex_days > 0 ? ` · ±${alert.flex_days}d` : '';
+  const dateLabel   = alert.target_date
+    ? formatDate(alert.target_date) + flexLabel
+    : (alert.month_start === alert.month_end
+        ? SHORT_MONTHS[alert.month_start - 1] + flexLabel
+        : `${SHORT_MONTHS[alert.month_start - 1]} – ${SHORT_MONTHS[alert.month_end - 1]}${flexLabel}`);
+
+  const isExpired = alert.active === 0;
 
   const card = document.createElement('div');
-  card.className = 'alert-card';
+  card.className = isExpired ? 'alert-card alert-card--expired' : 'alert-card';
   card.dataset.id = alert.id;
+
+  const statusBadge = isExpired
+    ? `<span class="expired-badge">Expired</span>`
+    : `<div class="active-badge" title="Active"></div>`;
+
+  const deadlineRow = alert.book_by
+    ? `<div class="deadline-row"><span class="deadline-badge">${isExpired ? 'Deadline passed' : 'Book by'} ${formatDate(alert.book_by)}</span></div>`
+    : '';
+
+  const actionsHtml = isExpired
+    ? `<button class="btn btn-sm btn-danger delete-btn" data-id="${alert.id}">Delete</button>`
+    : `
+      <button class="btn btn-sm btn-ghost check-btn"    data-id="${alert.id}">Check now</button>
+      <button class="btn btn-sm btn-ghost analysis-btn" data-id="${alert.id}">Analysis</button>
+      <button class="btn btn-sm btn-danger delete-btn"  data-id="${alert.id}">Delete</button>
+    `;
+
+  const alertSummary = isDealMode
+    ? `🔥 Deal Watcher active`
+    : `Alert below $${threshold} CAD/person · ${priceLabel}`;
+
   card.innerHTML = `
-    <div class="active-badge" title="Active"></div>
+    ${statusBadge}
     <div class="card-top">
       <div class="destination">YYC → ${alert.dest_label}</div>
-      <div class="route-label">${monthRange} · ${tripLabel} · ${stopsLabel}</div>
-      <div class="route-label">Alert below $${threshold} CAD/person · ${priceLabel}</div>
-      ${alert.book_by ? `<div class="deadline-row"><span class="deadline-badge">Book by ${formatDate(alert.book_by)}</span></div>` : ''}
+      <div class="route-label">${dateLabel} · ${tripLabel} · ${stopsLabel}</div>
+      <div class="route-label">${alertSummary}</div>
+      ${deadlineRow}
     </div>
     <div class="card-price">
       ${priceDisplay}
       ${bestPrice && bestPrice !== price ? `<div class="threshold-label">Best ever: $${bestPrice.toFixed(0)}</div>` : ''}
-      <div id="trend-line-${alert.id}" class="trend-line"></div>
-      <div id="advice-chip-${alert.id}" class="advice-chip-wrap"></div>
+      ${isExpired ? '' : `
+        <div id="trend-line-${alert.id}" class="trend-line"></div>
+        <div id="advice-chip-${alert.id}" class="advice-chip-wrap"></div>
+        <div id="why-panel-${alert.id}"   class="why-panel-wrap"></div>
+      `}
     </div>
     <div class="card-meta">
       ${alert.last_checked ? 'Checked ' + timeAgo(alert.last_checked) : 'Never checked'}
     </div>
     <div class="card-actions">
-      <button class="btn btn-sm btn-ghost check-btn"    data-id="${alert.id}">Check now</button>
-      <button class="btn btn-sm btn-ghost analysis-btn" data-id="${alert.id}">Analysis</button>
-      <button class="btn btn-sm btn-danger delete-btn"  data-id="${alert.id}">Delete</button>
+      ${actionsHtml}
     </div>
   `;
 
-  card.querySelector('.check-btn').addEventListener('click',    () => triggerCheck(alert.id));
-  card.querySelector('.analysis-btn').addEventListener('click', () => openAnalysis(alert.id, alert.dest_label));
-  card.querySelector('.delete-btn').addEventListener('click',   () => deleteAlert(alert.id));
+  if (!isExpired) {
+    card.querySelector('.check-btn').addEventListener('click',    () => triggerCheck(alert.id));
+    card.querySelector('.analysis-btn').addEventListener('click', () => openAnalysis(alert.id, alert.dest_label));
+  }
+  card.querySelector('.delete-btn').addEventListener('click', () => deleteAlert(alert.id));
 
-  setTimeout(() => loadAdviceChip(alert.id), 0);
+  if (!isExpired) setTimeout(() => loadAdviceChip(alert.id), 0);
   return card;
 }
 
 async function loadAdviceChip(alertId) {
   const trendEl  = document.getElementById(`trend-line-${alertId}`);
   const adviceEl = document.getElementById(`advice-chip-${alertId}`);
+  const whyEl    = document.getElementById(`why-panel-${alertId}`);
   if (!trendEl || !adviceEl) return;
   try {
-    const { trend, advice } = await api(`/api/alerts/${alertId}/analysis`);
+    const { trend, advice, reasons = [] } = await api(`/api/alerts/${alertId}/analysis`);
+    if (!trend || trend.observations < 3) { adviceEl.innerHTML = ''; return; }
     if (trend && trend.observations >= 5) {
       const arrowMap = { rising: '▲', falling: '▼', stable: '→' };
       const classMap = { rising: 'trend-rising', falling: 'trend-falling', stable: 'trend-stable' };
@@ -277,8 +390,30 @@ async function loadAdviceChip(alertId) {
       <div class="advice-inline ${chipClass}-inline">
         <span class="advice-chip ${chipClass}">${labelMap[advice.action]}</span>
         <span class="advice-inline-msg">${advice.message}</span>
+        ${reasons.length ? `<button type="button" class="why-toggle" data-id="${alertId}" aria-expanded="false">Why?</button>` : ''}
       </div>
     `;
+
+    // Build the collapsed Why panel
+    if (whyEl && reasons.length) {
+      whyEl.innerHTML = `
+        <ul class="why-list" hidden>
+          ${reasons.map(r => `
+            <li class="why-item why-${r.tone}">
+              <span class="why-icon">${r.icon}</span>
+              <span class="why-text">${r.text}</span>
+            </li>`).join('')}
+        </ul>
+      `;
+      const toggleBtn = adviceEl.querySelector('.why-toggle');
+      const listEl    = whyEl.querySelector('.why-list');
+      toggleBtn?.addEventListener('click', () => {
+        const open = !listEl.hidden;
+        listEl.hidden = open;
+        toggleBtn.setAttribute('aria-expanded', String(!open));
+        toggleBtn.textContent = open ? 'Why?' : 'Hide';
+      });
+    }
   } catch { /* non-critical */ }
 }
 
@@ -358,6 +493,10 @@ function updatePreviewBtn() { /* preview-btn removed; no-op */ }
 // ── Preview prices ────────────────────────────────────────────────────────────
 async function fetchPreview() {
   if (!selectedDest) return;
+  _calendarLoaded = false; // invalidate cached calendar when inputs change
+  const dateMode   = document.getElementById('date-mode').value;
+  const targetDate = document.getElementById('target-date').value;
+  const flexDays   = Number(document.getElementById('flex-days').value);
   const monthStart = Number(document.getElementById('month-start').value);
   const monthEnd   = Number(document.getElementById('month-end').value);
   const yearStart  = Number(document.getElementById('year-start').value);
@@ -367,26 +506,215 @@ async function fetchPreview() {
   const section    = document.getElementById('preview-section');
   const list       = document.getElementById('preview-list');
 
+  // Target mode but no date picked yet → don't hit the API
+  if (dateMode === 'target' && !targetDate) {
+    section.hidden = true;
+    return;
+  }
+
   section.hidden = false;
   list.innerHTML = '<div class="preview-loading"><span class="spinner"></span> Finding prices…</div>';
 
+  const params = new URLSearchParams({
+    dest:     selectedDest.iata,
+    stops:    String(stops),
+    tripType,
+    flexDays: String(flexDays),
+  });
+  if (dateMode === 'target') {
+    params.set('targetDate', targetDate);
+  } else {
+    params.set('monthStart', String(monthStart));
+    params.set('monthEnd',   String(monthEnd));
+    params.set('yearStart',  String(yearStart));
+    params.set('yearEnd',    String(yearEnd));
+  }
+
   try {
-    const results = await api(
-      `/api/flights/search?dest=${encodeURIComponent(selectedDest.iata)}&monthStart=${monthStart}&monthEnd=${monthEnd}&yearStart=${yearStart}&yearEnd=${yearEnd}&stops=${stops}&tripType=${tripType}`
-    );
+    const { results, insights } = await api(`/api/flights/search?${params}`);
     previewResults = results;
     renderPreview(results);
 
-    // Fetch price history for the cheapest result's departure date
-    if (results.length) {
-      const cheapest  = results[0];
-      const depDate   = cheapest.departure_at?.slice(0, 10) || '';
-      if (depDate) fetchAndRenderInsights(selectedDest.iata, depDate, tripType);
+    // Render price insights from the search response (no second API call needed)
+    const section = document.getElementById('preview-section');
+    let panel = document.getElementById('price-history-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'price-history-panel';
+      section.appendChild(panel);
     }
+    const cheapestDate = results.length ? (results[0].departure_at?.slice(0, 10) || '') : '';
+    renderInsightsPanel(panel, insights, cheapestDate);
   } catch (err) {
     list.innerHTML = `<p class="error-msg">${err.message}</p>`;
   }
 }
+
+// ── Calendar heatmap ──────────────────────────────────────────────────────────
+async function loadCalendarView() {
+  if (!selectedDest) return;
+  const container = document.getElementById('preview-calendar');
+  container.innerHTML = '<div class="preview-loading"><span class="spinner"></span> Building calendar…</div>';
+
+  const dateMode   = document.getElementById('date-mode').value;
+  const targetDate = document.getElementById('target-date').value;
+  const monthStart = Number(document.getElementById('month-start').value);
+  const yearStart  = Number(document.getElementById('year-start').value);
+  const stops      = Number(document.getElementById('stops').value);
+  const tripType   = document.getElementById('trip-type').value;
+
+  // Pick month/year: target mode → derive from target date; window mode → earliest month/year
+  let year  = yearStart;
+  let month = monthStart;
+  if (dateMode === 'target' && targetDate) {
+    [year, month] = targetDate.split('-').map(Number);
+  }
+
+  try {
+    const params = new URLSearchParams({
+      dest: selectedDest.iata, year: String(year), month: String(month),
+      stops: String(stops), tripType,
+    });
+    const { byDay } = await api(`/api/flights/calendar?${params}`);
+    _calendarLoaded = true;
+    renderCalendar(container, year, month, byDay);
+  } catch (err) {
+    container.innerHTML = `<p class="error-msg">${err.message}</p>`;
+  }
+}
+
+function renderCalendar(container, year, month, byDay) {
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDow    = new Date(year, month - 1, 1).getDay(); // 0=Sun
+
+  const prices = Object.values(byDay).map(r => r.price).filter(Boolean);
+  if (!prices.length) {
+    container.innerHTML = `<p class="muted">No calendar data — try adjusting stops or trip type.</p>`;
+    return;
+  }
+  const lo = Math.min(...prices);
+  const hi = Math.max(...prices);
+  const mid = (lo + hi) / 2;
+
+  const tintFor = (p) => {
+    if (p <= lo * 1.08)  return 'cal-lo';     // green — within 8% of lowest
+    if (p >= hi * 0.95)  return 'cal-hi';     // red   — top 5% of range
+    if (p > mid)         return 'cal-warm';
+    return 'cal-cool';
+  };
+
+  const pad = n => String(n).padStart(2, '0');
+  const dayCells = [];
+  for (let i = 0; i < firstDow; i++) dayCells.push(`<div class="cal-cell cal-empty"></div>`);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso  = `${year}-${pad(month)}-${pad(d)}`;
+    const r    = byDay[iso];
+    if (r?.price) {
+      const tint = tintFor(r.price);
+      const link = r.deep_link || '#';
+      dayCells.push(`
+        <a class="cal-cell ${tint}" href="${link}" target="_blank" rel="noopener noreferrer" title="$${Math.round(r.price)} CAD · ${r.airline || '—'}">
+          <span class="cal-day">${d}</span>
+          <span class="cal-price">$${Math.round(r.price)}</span>
+        </a>`);
+    } else {
+      dayCells.push(`<div class="cal-cell cal-blank"><span class="cal-day">${d}</span></div>`);
+    }
+  }
+
+  container.innerHTML = `
+    <div class="cal-header">
+      <span class="cal-title">${MONTH_NAMES[month - 1]} ${year}</span>
+      <span class="cal-legend">
+        <span class="cal-swatch cal-lo"></span> Low
+        <span class="cal-swatch cal-cool"></span> Typical
+        <span class="cal-swatch cal-hi"></span> High
+      </span>
+    </div>
+    <div class="cal-dow">
+      <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+    </div>
+    <div class="cal-grid">${dayCells.join('')}</div>
+    <p class="muted cal-hint">Tap a day to book it on Google Flights. Sampled every other day.</p>
+  `;
+}
+
+// ── Explore tab ───────────────────────────────────────────────────────────────
+async function loadExplore() {
+  const grid   = document.getElementById('explore-grid');
+  const theme  = document.getElementById('explore-theme').value;
+  const month  = document.getElementById('explore-month').value;
+  const maxP   = document.getElementById('explore-max').value;
+  grid.innerHTML = '<div class="preview-loading"><span class="spinner"></span> Loading destinations…</div>';
+
+  const params = new URLSearchParams();
+  if (theme) params.set('theme', theme);
+  if (month) params.set('month', month);
+  if (maxP)  params.set('maxPrice', maxP);
+
+  try {
+    const { results } = await api(`/api/explore?${params}`);
+    if (!results.length) {
+      grid.innerHTML = `<p class="muted empty-msg">No destinations match those filters yet. The sweep runs weekly — check back soon, or loosen the filters.</p>`;
+      return;
+    }
+    grid.innerHTML = results.map(r => {
+      const THEME_ICON = { beach:'🏝', europe:'🗼', asia:'🗾', us:'🇺🇸', canada:'🍁', adventure:'🌋' };
+      const icon = THEME_ICON[r.theme] || '✈';
+      const date = r.lowest_date ? new Date(r.lowest_date + 'T12:00:00').toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric' }) : '';
+      return `
+        <div class="explore-card-item">
+          <div class="explore-card-top">
+            <span class="explore-theme">${icon}</span>
+            <span class="explore-dest">YYC → ${r.dest_label}</span>
+          </div>
+          <div class="explore-price">$${Math.round(r.lowest_price)} <span class="explore-cad">CAD</span></div>
+          <div class="explore-meta">${date}${r.airline ? ' · ' + r.airline : ''}</div>
+          <div class="explore-actions">
+            ${r.deep_link ? `<a class="btn btn-sm btn-ghost" href="${r.deep_link}" target="_blank" rel="noopener noreferrer">Book ↗</a>` : ''}
+            <button class="btn btn-sm btn-primary explore-watch-btn" data-iata="${r.iata}" data-label="${r.dest_label}" data-date="${r.lowest_date || ''}">Watch route</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Wire "Watch route" buttons — switch to Alerts tab, prefill form
+    grid.querySelectorAll('.explore-watch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const iata  = btn.dataset.iata;
+        const label = btn.dataset.label;
+        const date  = btn.dataset.date;
+        prefillAlertForm({ iata, label, date });
+        // Switch to Alerts tab
+        document.querySelector('.top-nav-btn[data-tab="alerts"]').click();
+      });
+    });
+  } catch (err) {
+    grid.innerHTML = `<p class="error-msg">${err.message}</p>`;
+  }
+}
+
+function prefillAlertForm({ iata, label, date }) {
+  selectedDest = { iata, cityName: label, name: label, label: `${label} (${iata})` };
+  document.getElementById('dest-input').value       = `${label} (${iata})`;
+  document.getElementById('dest-iata').value        = iata;
+  document.getElementById('dest-label-hidden').value = label;
+  if (date) {
+    document.getElementById('target-date').value = date;
+    document.getElementById('target-date-label').textContent = formatDate(date);
+  }
+  setTimeout(fetchPreview, 200);
+  // Scroll form into view
+  document.getElementById('alert-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Explore filter listeners (wired once DOM is ready)
+document.addEventListener('DOMContentLoaded', () => {
+  ['explore-theme', 'explore-month', 'explore-max'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', loadExplore);
+  });
+});
 
 function renderPreview(results) {
   const list        = document.getElementById('preview-list');
@@ -432,26 +760,6 @@ function renderPreview(results) {
 }
 
 const TAX_FACTOR = 1.15; // approximate tax multiplier for display adjustment
-
-// ── Price insights (60-day history from Google Flights) ───────────────────────
-async function fetchAndRenderInsights(dest, date, tripType) {
-  // Insert a loading placeholder below the chips
-  const section = document.getElementById('preview-section');
-  let panel = document.getElementById('price-history-panel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'price-history-panel';
-    section.appendChild(panel);
-  }
-  panel.innerHTML = '<div class="ph-loading"><span class="spinner"></span> Loading price history…</div>';
-
-  try {
-    const ins = await api(`/api/flights/insights?dest=${encodeURIComponent(dest)}&date=${encodeURIComponent(date)}&tripType=${encodeURIComponent(tripType)}`);
-    renderInsightsPanel(panel, ins, date);
-  } catch {
-    panel.innerHTML = ''; // silently hide if insights unavailable
-  }
-}
 
 function renderInsightsPanel(panel, ins, date) {
   if (!ins || !ins.price_history?.length) { panel.innerHTML = ''; return; }
@@ -569,17 +877,40 @@ function setupForm() {
                    || _clerk?.user?.emailAddresses?.[0]?.emailAddress
                    || 'alerts@yycflights.ca';
 
+    const dateMode   = document.getElementById('date-mode').value;
+    const targetDate = document.getElementById('target-date').value;
+    const alertMode  = document.getElementById('alert-mode').value;
+
+    if (dateMode === 'target' && !targetDate) {
+      showFormError('Please pick a target date (or switch to date window mode).');
+      return;
+    }
+
+    // Derive month_start/month_end from target date so backend + analysis still work
+    let monthStart, monthEnd;
+    if (dateMode === 'target') {
+      const [, m] = targetDate.split('-').map(Number);
+      monthStart = m;
+      monthEnd   = m;
+    } else {
+      monthStart = Number(document.getElementById('month-start').value);
+      monthEnd   = Number(document.getElementById('month-end').value);
+    }
+
     const body = {
       destination: selectedDest.iata,
       dest_label:  selectedDest.cityName || selectedDest.name,
-      month_start: Number(document.getElementById('month-start').value),
-      month_end:   Number(document.getElementById('month-end').value),
-      threshold:   Number(document.getElementById('threshold').value),
+      month_start: monthStart,
+      month_end:   monthEnd,
+      threshold:   alertMode === 'threshold' ? Number(document.getElementById('threshold').value) : 0,
       email:       userEmail,
       book_by:        document.getElementById('book-by').value || null,
       stops:          Number(document.getElementById('stops').value),
       trip_type:      document.getElementById('trip-type').value,
       taxes_included: Number(document.getElementById('taxes-included').value),
+      target_date:    dateMode === 'target' ? targetDate : null,
+      flex_days:      Number(document.getElementById('flex-days').value),
+      alert_mode:     alertMode,
     };
 
     const btn = form.querySelector('[type=submit]');
@@ -597,11 +928,21 @@ function setupForm() {
       document.getElementById('trip-type').value = 'round';
       document.getElementById('stops').value = '0';
       document.getElementById('taxes-included').value = '1';
+      document.getElementById('date-mode').value  = 'target';
+      document.getElementById('flex-days').value  = '0';
+      document.getElementById('alert-mode').value = 'threshold';
+      document.getElementById('target-date').value = '';
+      document.getElementById('target-date-label').textContent = 'Pick target date';
+      document.getElementById('target-date-wrap').hidden = false;
+      document.getElementById('window-wrap').hidden      = true;
+      document.getElementById('threshold-wrap').hidden    = false;
+      document.getElementById('deal-watcher-wrap').hidden = true;
       document.querySelectorAll('.toggle-group').forEach(g => {
         g.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
       });
       document.getElementById('taxes-group')?.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
       previewResults = [];
+      _calendarLoaded = false;
       await triggerCheck(alert.id);
     } catch (err) {
       showFormError(err.message);
@@ -657,44 +998,6 @@ function closeDrawer() {
     document.getElementById('overlay').hidden = true;
     document.body.style.overflow = '';
   }
-}
-
-// ── History drawer ────────────────────────────────────────────────────────────
-async function openHistory(alertId, label) {
-  openDrawer(`YYC → ${label} — history`, '<div class="drawer-loading"><span class="spinner"></span> Loading…</div>');
-  try {
-    const results = await api(`/api/flights/results/${alertId}`);
-    document.getElementById('drawer-content').innerHTML = '';
-    renderResults(results);
-  } catch (err) {
-    document.getElementById('drawer-content').innerHTML = `<p class="error-msg">${err.message}</p>`;
-  }
-}
-
-function renderResults(results) {
-  const el = document.getElementById('drawer-content');
-  if (!results.length) {
-    el.innerHTML = '<p class="muted">No results yet — click "Check now" on the alert card.</p>';
-    return;
-  }
-  const rows = results.map(r => {
-    const dep = new Date(r.departure_at).toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric', weekday:'short' });
-    const ret = r.return_at ? new Date(r.return_at).toLocaleDateString('en-CA', { month:'short', day:'numeric' }) : '—';
-    return `<tr>
-      <td class="price-cell">$${r.price.toFixed(0)}</td>
-      <td>${dep}</td><td>${ret}</td>
-      <td>${r.airline || '—'}</td>
-      <td class="muted">${timeAgo(r.found_at)}</td>
-      ${r.deep_link ? `<td><a href="${r.deep_link}" target="_blank" class="book-link">Book ↗</a></td>` : '<td></td>'}
-    </tr>`;
-  }).join('');
-  el.innerHTML = `
-    <div class="table-scroll">
-      <table class="results-table">
-        <thead><tr><th>Price</th><th>Departs</th><th>Returns</th><th>Airline</th><th>Found</th><th></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
 }
 
 // ── Analysis drawer ───────────────────────────────────────────────────────────

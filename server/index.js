@@ -8,6 +8,7 @@ import alertsRouter from './routes/alerts.js';
 import flightsRouter from './routes/flights.js';
 import destinationsRouter from './routes/destinations.js';
 import digestRouter from './routes/digest.js';
+import exploreRouter from './routes/explore.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app  = express();
@@ -49,6 +50,7 @@ app.use('/api/alerts',       alertsRouter);
 app.use('/api/flights',      flightsRouter);
 app.use('/api/destinations', destinationsRouter);
 app.use('/api/digest',       digestRouter);
+app.use('/api/explore',      exploreRouter);
 
 app.get('/api/health', (_req, res) => {
   const { lastRun, isRunning } = getSchedulerStatus();

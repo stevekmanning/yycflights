@@ -231,3 +231,147 @@ export function generateAdvice(trend, alert) {
   return { ...base, action: 'monitor', detail: projectionDetail,
     message: `Prices are ${direction} around the historical average ($${avg}). No strong signal yet — keep watching.` };
 }
+
+/**
+ * Build plain-English "why this price?" bullets for the advisory panel.
+ * Each bullet: { icon, text, tone: 'good' | 'warn' | 'neutral' }
+ *
+ * @param {object} args  { alert, trend, advice, floor, latestResults }
+ */
+export function generateReasons({ alert, trend, advice, floor, latestResults }) {
+  const reasons = [];
+
+  // 1. Percentile / floor comparison
+  if (trend && floor) {
+    const current = trend.current;
+    const pctVsP10 = ((current - floor.p10) / floor.p10) * 100;
+    if (current <= floor.p10 * 0.95) {
+      reasons.push({
+        icon: '🔥',
+        tone: 'good',
+        text: `$${current} is ${Math.round(Math.abs(pctVsP10))}% below the typical low of $${floor.p10} — exceptional deal.`,
+      });
+    } else if (current <= floor.p10) {
+      reasons.push({
+        icon: '🟢',
+        tone: 'good',
+        text: `$${current} is in the bottom 10% of ${floor.samples} daily-low observations (typical low: $${floor.p10}).`,
+      });
+    } else if (current >= floor.median * 1.15) {
+      reasons.push({
+        icon: '🔴',
+        tone: 'warn',
+        text: `$${current} is ~${Math.round(((current - floor.median) / floor.median) * 100)}% above the median ($${floor.median}) — on the high side.`,
+      });
+    } else {
+      reasons.push({
+        icon: '🟡',
+        tone: 'neutral',
+        text: `$${current} is around typical for this route (median: $${floor.median}, low: $${floor.min}).`,
+      });
+    }
+  } else if (trend && trend.observations >= 2) {
+    reasons.push({
+      icon: '📊',
+      tone: 'neutral',
+      text: `Based on ${trend.observations} days of data — low $${trend.min}, avg $${trend.avg}, high $${trend.max}.`,
+    });
+  }
+
+  // 2. Trend direction
+  if (trend && trend.observations >= 3) {
+    if (trend.direction === 'falling') {
+      reasons.push({
+        icon: '▼',
+        tone: 'good',
+        text: `Prices are falling ~$${Math.abs(trend.slopePerDay)}/day over recent checks.`,
+      });
+    } else if (trend.direction === 'rising') {
+      reasons.push({
+        icon: '▲',
+        tone: 'warn',
+        text: `Prices are rising ~$${Math.abs(trend.slopePerDay)}/day — waiting may cost more.`,
+      });
+    }
+  }
+
+  // 3. Booking window / deadline pressure
+  if (advice.bookingWindow?.status === 'sweet_spot') {
+    reasons.push({
+      icon: '🎯',
+      tone: 'good',
+      text: 'You are in the sweet spot — 6 weeks to 4 months before departure, when fares are typically cheapest.',
+    });
+  } else if (advice.bookingWindow?.status === 'too_early') {
+    reasons.push({
+      icon: '⏳',
+      tone: 'neutral',
+      text: 'Still early — international fares usually drop 3–6 months before departure.',
+    });
+  } else if (advice.bookingWindow?.status === 'late' || advice.bookingWindow?.status === 'last_minute') {
+    reasons.push({
+      icon: '⚠️',
+      tone: 'warn',
+      text: 'Close to departure — last-minute fares typically rise sharply from here.',
+    });
+  }
+
+  if (advice.daysUntilDeadline !== null && advice.daysUntilDeadline <= 14 && advice.daysUntilDeadline >= 0) {
+    reasons.push({
+      icon: '⏰',
+      tone: 'warn',
+      text: `Your book-by deadline is in ${advice.daysUntilDeadline} day${advice.daysUntilDeadline === 1 ? '' : 's'}.`,
+    });
+  }
+
+  // 4. Airline premium (if the cheapest recent result is much cheaper than the user's preferred-looking carriers)
+  if (latestResults?.length >= 3) {
+    const byAirline = {};
+    for (const r of latestResults) {
+      if (!r.airline) continue;
+      if (!byAirline[r.airline] || r.price < byAirline[r.airline]) byAirline[r.airline] = r.price;
+    }
+    const carriers = Object.entries(byAirline).sort((a, b) => a[1] - b[1]);
+    if (carriers.length >= 2) {
+      const [cheapest, cheapestPrice] = carriers[0];
+      const [secondBest, secondPrice] = carriers[1];
+      const delta = Math.round(secondPrice - cheapestPrice);
+      if (delta >= 40) {
+        reasons.push({
+          icon: '✈️',
+          tone: 'neutral',
+          text: `${cheapest} is $${delta} cheaper than ${secondBest} on this route.`,
+        });
+      }
+    }
+  }
+
+  // 5. Projection at deadline
+  if (advice.projectedAtDeadline !== null && Math.abs(advice.projectedSavings ?? 0) >= 10) {
+    const delta = advice.projectedSavings;
+    reasons.push({
+      icon: delta > 0 ? '📈' : '📉',
+      tone: delta > 0 ? 'warn' : 'good',
+      text: delta > 0
+        ? `At current trend, waiting to your deadline could cost ~$${delta} more (~$${advice.projectedAtDeadline} projected).`
+        : `At current trend, prices could drop ~$${Math.abs(delta)} by your deadline (~$${advice.projectedAtDeadline} projected).`,
+    });
+  }
+
+  // 6. Alert mode context (Deal Watcher)
+  if (alert.alert_mode === 'deal' && floor) {
+    reasons.push({
+      icon: '👀',
+      tone: 'neutral',
+      text: `Deal Watcher is active — you'll be emailed when price drops ≥5% below the typical low ($${floor.p10}).`,
+    });
+  } else if (alert.alert_mode === 'deal' && !floor) {
+    reasons.push({
+      icon: '📚',
+      tone: 'neutral',
+      text: 'Deal Watcher is learning — a few more days of price checks needed before it can spot anomalies.',
+    });
+  }
+
+  return reasons;
+}

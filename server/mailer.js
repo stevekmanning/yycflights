@@ -7,7 +7,7 @@ function getClient() {
   return _client;
 }
 
-export async function sendAlert({ alert, result }) {
+export async function sendAlert({ alert, result, reason = 'threshold' }) {
   if (!process.env.RESEND_API_KEY) {
     console.warn('[mailer] RESEND_API_KEY not set — skipping email for alert', alert.id);
     return;
@@ -23,7 +23,10 @@ export async function sendAlert({ alert, result }) {
     : 'One-way';
 
   const from    = process.env.ALERT_FROM || 'YYC Flights <onboarding@resend.dev>';
-  const subject = `✈️ YYC → ${alert.dest_label}: $${result.price} CAD found!`;
+  const isDeal  = reason === 'deal';
+  const subject = isDeal
+    ? `🔥 YYC → ${alert.dest_label}: $${result.price} CAD — deal detected!`
+    : `✈️ YYC → ${alert.dest_label}: $${result.price} CAD found!`;
 
   const bookBtn = result.deep_link
     ? `<p style="margin:24px 0">
@@ -63,6 +66,11 @@ export async function sendAlert({ alert, result }) {
               <td style="padding:8px 0;color:#64748b">Airline</td>
               <td style="padding:8px 0;font-weight:600">${result.airline}</td>
             </tr>` : ''}
+            ${isDeal ? `
+            <tr>
+              <td style="padding:8px 0;color:#64748b">Trigger</td>
+              <td style="padding:8px 0;font-weight:600;color:#22c55e">🔥 Deal Watcher — unusually cheap for this route</td>
+            </tr>` : `
             <tr>
               <td style="padding:8px 0;color:#64748b">Your threshold</td>
               <td style="padding:8px 0;font-weight:600">$${alert.threshold} CAD</td>
@@ -70,7 +78,7 @@ export async function sendAlert({ alert, result }) {
             <tr>
               <td style="padding:8px 0;color:#64748b">Savings</td>
               <td style="padding:8px 0;font-weight:600;color:#22c55e">$${Math.round(alert.threshold - result.price)} below threshold</td>
-            </tr>
+            </tr>`}
           </table>
 
           ${bookBtn}

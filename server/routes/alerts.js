@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { listAlerts, getAlert, createAlert, updateAlert, deleteAlert, getPriceHistory } from '../db.js';
+import { listAlerts, getAlert, createAlert, updateAlert, deleteAlert, getPriceHistory, getAlertPriceFloor, getResults } from '../db.js';
 import { checkOneAlert } from '../services/flightChecker.js';
-import { computeTrend, generateAdvice } from '../services/advisor.js';
+import { computeTrend, generateAdvice, generateReasons } from '../services/advisor.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -15,13 +15,21 @@ const AlertSchema = z.object({
   dest_label:  z.string().min(1),
   month_start: z.number().int().min(1).max(12),
   month_end:   z.number().int().min(1).max(12),
-  threshold:   z.number().positive(),
+  threshold:   z.number().nonnegative().optional().default(0),
   email:       z.string().email(),
   book_by:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  stops:         z.number().int().min(0).max(3).optional().default(0),
-  trip_type:     z.enum(['round', 'oneway']).optional().default('round'),
+  stops:          z.number().int().min(0).max(3).optional().default(0),
+  trip_type:      z.enum(['round', 'oneway']).optional().default('round'),
   taxes_included: z.number().int().min(0).max(1).optional().default(1),
-});
+  // Feature 1 — target date + flex
+  target_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  flex_days:   z.number().int().min(0).max(14).optional().default(0),
+  // Feature 3 — alert mode
+  alert_mode:  z.enum(['threshold', 'deal']).optional().default('threshold'),
+}).refine(
+  d => d.alert_mode === 'deal' || (d.threshold && d.threshold > 0),
+  { message: 'threshold is required when alert_mode is "threshold"', path: ['threshold'] }
+);
 
 // GET /api/alerts
 router.get('/', (req, res) => {
@@ -77,7 +85,7 @@ router.post('/:id/check', async (req, res) => {
   }
 });
 
-// GET /api/alerts/:id/analysis  — trend + advice
+// GET /api/alerts/:id/analysis  — trend + advice + reasons
 router.get('/:id/analysis', (req, res) => {
   const id    = Number(req.params.id);
   const alert = getAlert(id, req.userId);
@@ -86,11 +94,14 @@ router.get('/:id/analysis', (req, res) => {
   const history = getPriceHistory(id);
   const trend   = computeTrend(history);
   const advice  = generateAdvice(trend, alert);
+  const floor   = getAlertPriceFloor(id, 5);
+  const latestResults = getResults(id, 20);
+  const reasons = generateReasons({ alert, trend, advice, floor, latestResults });
 
   // Strip non-serialisable helper fn before sending
   const trendJson = trend ? (({ projectDaysOut, ...rest }) => rest)(trend) : null;
 
-  res.json({ alert, trend: trendJson, advice, history });
+  res.json({ alert, trend: trendJson, advice, history, floor, reasons });
 });
 
 export default router;

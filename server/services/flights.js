@@ -29,6 +29,21 @@ function firstMondayOnOrAfter(date) {
 }
 
 /**
+ * Build a list of dates around a target date, ±flexDays inclusive.
+ * Skips past dates.
+ */
+function flexDates(targetYmd, flexDays = 0) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(targetYmd + 'T12:00:00');
+  const dates = [];
+  for (let d = -flexDays; d <= flexDays; d++) {
+    const dt = new Date(target.getTime() + d * 86_400_000);
+    if (dt >= today) dates.push(fmtDate(dt));
+  }
+  return dates;
+}
+
+/**
  * Build candidate departure dates: 3 per month (early / mid / late),
  * all landing on Mondays for consistent pricing. Skips past dates.
  * yearStart/yearEnd: explicit years (optional — auto-calculated if omitted).
@@ -71,17 +86,46 @@ function candidateDates(monthStart, monthEnd, yearStart = null, yearEnd = null) 
  * Queries the first Monday of each month; returns sorted by price ascending.
  * Each result: { price, currency, departure_at, return_at, airline, deep_link, raw_json }
  */
-export async function searchFlights({ destination, monthStart = 1, monthEnd = 12, yearStart = null, yearEnd = null, stops = 0, tripType = 'round' }) {
-  const origin      = process.env.ORIGIN || 'YYC';
-  const departures  = candidateDates(monthStart, monthEnd, yearStart, yearEnd);
+export async function searchFlights({
+  destination,
+  monthStart = 1, monthEnd = 12,
+  yearStart = null, yearEnd = null,
+  targetDate = null,  // YYYY-MM-DD — if set, overrides month range
+  flexDays   = 0,     // ±N day window when targetDate set, or 0-7 flex within month range
+  stops = 0,
+  tripType = 'round',
+  departureDates = null, // optional explicit list — used by calendar endpoint
+}) {
+  const origin = process.env.ORIGIN || 'YYC';
+
+  let departures;
+  if (departureDates?.length) {
+    departures = departureDates;
+  } else if (targetDate) {
+    // Target-date mode: search ±flexDays around the single target
+    departures = flexDates(targetDate, Math.max(0, Math.min(14, flexDays)));
+  } else {
+    // Window mode: 3 dates/month, optionally expanded by ±flexDays
+    const monthly = candidateDates(monthStart, monthEnd, yearStart, yearEnd);
+    if (flexDays > 0) {
+      const expanded = new Set();
+      for (const d of monthly) {
+        for (const fd of flexDates(d, Math.min(7, flexDays))) expanded.add(fd);
+      }
+      departures = [...expanded];
+    } else {
+      departures = monthly;
+    }
+  }
 
   if (departures.length === 0) {
     console.warn('[flights] All candidate dates are in the past — nothing to search');
-    return [];
+    return { results: [], insights: null };
   }
 
   const isOneWay = tripType === 'oneway';
   const allOffers = [];
+  let capturedInsights = null;
 
   for (const departureDate of departures) {
     const returnDate = fmtDate(
@@ -114,6 +158,7 @@ export async function searchFlights({ destination, monthStart = 1, monthEnd = 12
       }
 
       const json    = await res.json();
+      if (!capturedInsights && json.price_insights) capturedInsights = json.price_insights;
       const flights = [
         ...(json.best_flights   || []),
         ...(json.other_flights  || []),
@@ -147,38 +192,7 @@ export async function searchFlights({ destination, monthStart = 1, monthEnd = 12
     }
   }
 
-  return allOffers.sort((a, b) => a.price - b.price);
-}
-
-/**
- * Fetch Google Flights price_insights for a specific route + departure date.
- * Returns: { lowest_price, price_level, typical_price_range, price_history }
- * price_history: [[unix_seconds, price_cad], ...] — ~60 days of history
- */
-export async function fetchPriceInsights({ destination, date, tripType = 'round' }) {
-  const origin   = process.env.ORIGIN || 'YYC';
-  const isOneWay = tripType === 'oneway';
-
-  const params = new URLSearchParams({
-    engine:        'google_flights',
-    departure_id:  origin,
-    arrival_id:    destination,
-    outbound_date: date,
-    type:          isOneWay ? '2' : '1',
-    currency:      'CAD',
-    hl:            'en',
-    api_key:       apiKey(),
-  });
-
-  if (!isOneWay) {
-    const returnDate = fmtDate(new Date(new Date(date).getTime() + 7 * 86_400_000));
-    params.set('return_date', returnDate);
-  }
-
-  const res  = await fetch(`${SERPAPI_BASE}?${params}`);
-  if (!res.ok) throw new Error(`SerpApi ${res.status}`);
-  const json = await res.json();
-  return json.price_insights || null;
+  return { results: allOffers.sort((a, b) => a.price - b.price), insights: capturedInsights };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,12 +1,13 @@
 import cron from 'node-cron';
 import { runAllChecks } from './services/flightChecker.js';
 import { sendWeeklyDigest } from './services/digest.js';
+import { runExploreSweep } from './services/explore.js';
 
 let lastRun = null;
 let isRunning = false;
 
 export function startScheduler() {
-  const schedule = process.env.CRON_SCHEDULE || '0 */6 * * *';
+  const schedule = process.env.CRON_SCHEDULE || '0 0 */2 * *';
 
   if (!cron.validate(schedule)) {
     console.error(`[scheduler] Invalid cron schedule: "${schedule}"`);
@@ -31,6 +32,18 @@ export function startScheduler() {
       console.log(`[scheduler] Digest sent — ${result.sent} emails`);
     } catch (err) {
       console.error('[scheduler] Digest error:', err.message);
+    }
+  });
+
+  // Weekly Explore sweep — Monday 09:00 UTC (pre-workday, quiet hour)
+  const exploreSchedule = process.env.EXPLORE_CRON_SCHEDULE || '0 9 * * 1';
+  cron.schedule(exploreSchedule, async () => {
+    console.log('[scheduler] Running Explore sweep…');
+    try {
+      const result = await runExploreSweep();
+      console.log(`[scheduler] Explore sweep — ${result.ok} ok, ${result.fail} failed`);
+    } catch (err) {
+      console.error('[scheduler] Explore sweep error:', err.message);
     }
   });
 }

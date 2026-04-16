@@ -1,4 +1,4 @@
-import { listAllActiveAlerts, insertResult, touchAlertChecked, wasNotifiedRecently, recordNotification } from '../db.js';
+import { listAllActiveAlerts, insertResult, touchAlertChecked, wasNotifiedRecently, recordNotification, updateAlert, getAlertPriceFloor } from '../db.js';
 import { searchFlights } from './flights.js';
 import { sendAlert } from '../mailer.js';
 
@@ -21,12 +21,14 @@ export async function checkOneAlert(alert, { force = false } = {}) {
 
   recentManualChecks.set(alert.id, Date.now());
 
-  const offers = await searchFlights({
+  const { results: offers } = await searchFlights({
     destination: alert.destination,
     monthStart:  alert.month_start,
     monthEnd:    alert.month_end,
-    stops:       alert.stops    ?? 0,
-    tripType:    alert.trip_type ?? 'round',
+    targetDate:  alert.target_date || null,
+    flexDays:    alert.flex_days   ?? 0,
+    stops:       alert.stops       ?? 0,
+    tripType:    alert.trip_type   ?? 'round',
   });
 
   touchAlertChecked(alert.id);
@@ -44,19 +46,34 @@ export async function checkOneAlert(alert, { force = false } = {}) {
     if (offer === cheapestOffer) cheapestResultId = id;
   }
 
-  let alerted = false;
+  let alerted    = false;
+  let triggerReason = null; // 'threshold' | 'deal' | null
 
-  // Adjust effective threshold: if user set a base-fare budget, SerpApi returns
-  // all-in price (taxes included), so we gross up by ~15% for comparison.
-  const TAX_FACTOR = 1.15;
-  const effectiveThreshold = (alert.taxes_included === 0)
-    ? alert.threshold * TAX_FACTOR
-    : alert.threshold;
+  const mode = alert.alert_mode || 'threshold';
 
-  if (cheapestOffer.price < effectiveThreshold) {
+  if (mode === 'deal') {
+    // Deal Watcher: trigger when price is ≥5% below the learned floor (P10),
+    // provided we have enough samples to trust the baseline.
+    const floor = getAlertPriceFloor(alert.id, 7);
+    if (floor && cheapestOffer.price <= floor.p10 * 0.95) {
+      triggerReason = 'deal';
+    }
+  } else {
+    // Classic threshold mode (default)
+    // Adjust effective threshold: if user set a base-fare budget, SerpApi returns
+    // all-in price (taxes included), so we gross up by ~15% for comparison.
+    const TAX_FACTOR = 1.15;
+    const effectiveThreshold = (alert.taxes_included === 0)
+      ? alert.threshold * TAX_FACTOR
+      : alert.threshold;
+
+    if (cheapestOffer.price < effectiveThreshold) triggerReason = 'threshold';
+  }
+
+  if (triggerReason) {
     if (!wasNotifiedRecently(alert.id)) {
       try {
-        await sendAlert({ alert, result: cheapestOffer });
+        await sendAlert({ alert, result: cheapestOffer, reason: triggerReason });
         recordNotification(alert.id, cheapestResultId);
         alerted = true;
       } catch (err) {
@@ -67,7 +84,7 @@ export async function checkOneAlert(alert, { force = false } = {}) {
     }
   }
 
-  return { alert, cheapest: cheapestOffer, alerted, offersFound: offers.length };
+  return { alert, cheapest: cheapestOffer, alerted, offersFound: offers.length, triggerReason };
 }
 
 /**
@@ -83,7 +100,8 @@ export async function runAllChecks() {
   for (const alert of alerts) {
     // Auto-skip expired alerts (book_by date has passed)
     if (alert.book_by && alert.book_by < today) {
-      console.log(`[flightChecker] Skipping alert ${alert.id} (${alert.dest_label}) — book_by ${alert.book_by} has passed`);
+      console.log(`[flightChecker] Expiring alert ${alert.id} (${alert.dest_label}) — book_by ${alert.book_by} has passed`);
+      updateAlert(alert.id, { active: 0 });
       continue;
     }
     try {

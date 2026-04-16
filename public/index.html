@@ -37,6 +37,10 @@
           <span class="plane">✈</span>
           <span>YYC Flights</span>
         </div>
+        <nav class="top-nav" role="tablist">
+          <button class="top-nav-btn active" data-tab="alerts" role="tab">Alerts</button>
+          <button class="top-nav-btn"        data-tab="explore" role="tab">Explore</button>
+        </nav>
         <div class="header-right">
           <button id="how-btn" class="how-btn" title="How it works">How it works</button>
           <button id="user-btn" class="user-btn" title="Sign out">
@@ -49,6 +53,11 @@
     <main>
 
       <p class="app-tagline">Get emailed the moment YYC flight prices drop below your budget.</p>
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!--                    ALERTS TAB                  -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div id="tab-alerts" class="tab-panel">
 
       <!-- New Alert Form -->
       <section class="card form-card">
@@ -96,9 +105,27 @@
           <div class="form-section">
             <div class="section-label-row">
               <span class="section-label">When do you want to fly?</span>
-              <span class="tip" data-tip="The wider your travel window, the more departure dates we check — which typically means better prices.">?</span>
+              <span class="tip" data-tip="Pick an exact target date (best for known trips) or a broader window (best for price-hunting).">?</span>
             </div>
-            <div class="two-col" style="margin-top:10px">
+
+            <!-- Date mode toggle -->
+            <div class="toggle-group" id="date-mode-group" role="group" aria-label="Date mode" style="margin-top:10px">
+              <button type="button" class="toggle-btn active" data-value="target">Target date</button>
+              <button type="button" class="toggle-btn"        data-value="window">Date window</button>
+            </div>
+            <input id="date-mode" type="hidden" value="target" />
+
+            <!-- Target-date picker -->
+            <div id="target-date-wrap" class="date-pick-wrap" style="margin-top:12px">
+              <input id="target-date" type="date" class="date-pick-hidden" tabindex="-1" aria-hidden="true" />
+              <button type="button" id="target-date-btn" class="date-pick-btn">
+                <span id="target-date-label">Pick target date</span>
+                <span class="date-pick-icon">📅</span>
+              </button>
+            </div>
+
+            <!-- Window: month+year range -->
+            <div id="window-wrap" class="two-col" style="margin-top:12px" hidden>
               <div class="field">
                 <label class="sublabel">Earliest</label>
                 <div class="month-year-wrap">
@@ -114,25 +141,53 @@
                 </div>
               </div>
             </div>
+
+            <!-- Flex days -->
+            <label class="sublabel" style="margin-top:14px;display:block">Date flexibility <span class="muted-inline">— we'll check more dates within range</span></label>
+            <div class="toggle-group" id="flex-group" role="group" aria-label="Flex days" style="margin-top:6px">
+              <button type="button" class="toggle-btn active" data-value="0">Exact</button>
+              <button type="button" class="toggle-btn"        data-value="3">±3 days</button>
+              <button type="button" class="toggle-btn"        data-value="7">±7 days</button>
+            </div>
+            <input id="flex-days" type="hidden" value="0" />
           </div>
 
           <!-- ④ Price alert -->
           <div class="form-section">
             <div class="section-label-row">
               <span class="section-label">Price alert</span>
-              <span class="tip" data-tip="Per person, for your selected trip type. We check prices 3 times per month across your travel window.">?</span>
+              <span class="tip" data-tip="Pick a specific budget OR let Deal Watcher learn the route's typical low and ping you when it dips unusually cheap.">?</span>
             </div>
-            <label class="sublabel" style="margin-top:10px;display:block">Alert me when price drops below</label>
-            <div class="threshold-row" style="margin-top:6px">
-              <span class="currency-label">CAD $</span>
-              <input id="threshold" type="number" min="1" step="1" placeholder="800" required />
+
+            <!-- Mode toggle -->
+            <div class="toggle-group" id="mode-group" role="group" aria-label="Alert mode" style="margin-top:10px">
+              <button type="button" class="toggle-btn active" data-value="threshold">Below my price</button>
+              <button type="button" class="toggle-btn"        data-value="deal">🔥 Deal Watcher <span class="toggle-sub">(auto-learn)</span></button>
             </div>
-            <label class="sublabel" style="margin-top:12px;display:block">My budget is the</label>
-            <div class="toggle-group" id="taxes-group" role="group" aria-label="Price type" style="margin-top:6px">
-              <button type="button" class="toggle-btn active" data-value="1">All-in price <span class="toggle-sub">(taxes &amp; fees included)</span></button>
-              <button type="button" class="toggle-btn" data-value="0">Base fare <span class="toggle-sub">(before taxes)</span></button>
+            <input id="alert-mode" type="hidden" value="threshold" />
+
+            <!-- Threshold input -->
+            <div id="threshold-wrap">
+              <label class="sublabel" style="margin-top:12px;display:block">Alert me when price drops below</label>
+              <div class="threshold-row" style="margin-top:6px">
+                <span class="currency-label">CAD $</span>
+                <input id="threshold" type="number" min="1" step="1" placeholder="800" />
+              </div>
+              <label class="sublabel" style="margin-top:12px;display:block">My budget is the</label>
+              <div class="toggle-group" id="taxes-group" role="group" aria-label="Price type" style="margin-top:6px">
+                <button type="button" class="toggle-btn active" data-value="1">All-in price <span class="toggle-sub">(taxes &amp; fees included)</span></button>
+                <button type="button" class="toggle-btn" data-value="0">Base fare <span class="toggle-sub">(before taxes)</span></button>
+              </div>
+              <input id="taxes-included" type="hidden" value="1" />
             </div>
-            <input id="taxes-included" type="hidden" value="1" />
+
+            <!-- Deal Watcher explainer -->
+            <div id="deal-watcher-wrap" class="deal-watcher-panel" hidden>
+              <p class="deal-watcher-msg">
+                No threshold needed. We'll track this route for 1–2 weeks to learn its typical low, then email you whenever a price appears ≥5% below that floor.
+              </p>
+              <p class="deal-watcher-tip muted">Best for: "I don't know what a good price is — just tell me when it's a real deal."</p>
+            </div>
           </div>
 
           <!-- ⑤ Booking deadline (optional) -->
@@ -160,9 +215,13 @@
           <div id="preview-section" hidden>
             <div class="preview-header">
               <span class="preview-title">Current prices</span>
-              <span class="muted preview-hint">Tap a price to use as your threshold</span>
+              <div class="preview-view-toggle">
+                <button type="button" class="preview-view-btn active" data-view="list">List</button>
+                <button type="button" class="preview-view-btn"        data-view="calendar">Calendar</button>
+              </div>
             </div>
-            <div id="preview-list" class="preview-list"></div>
+            <div id="preview-list"     class="preview-list"></div>
+            <div id="preview-calendar" class="preview-calendar" hidden></div>
           </div>
 
           <p id="form-error" class="error-msg" hidden></p>
@@ -176,6 +235,55 @@
           <p class="muted empty-msg">No alerts yet — add one above.</p>
         </div>
       </section>
+
+      </div><!-- /tab-alerts -->
+
+      <!-- ══════════════════════════════════════════════ -->
+      <!--                    EXPLORE TAB                 -->
+      <!-- ══════════════════════════════════════════════ -->
+      <div id="tab-explore" class="tab-panel" hidden>
+        <section class="card explore-card">
+          <div class="explore-header">
+            <h2 style="margin:0">Explore cheapest destinations from YYC</h2>
+            <p class="muted" style="margin:4px 0 0;font-size:.85rem">Pre-computed weekly. Click any destination to set up an alert or book it directly.</p>
+          </div>
+
+          <div class="explore-filters">
+            <div class="field">
+              <label class="sublabel">Theme</label>
+              <select id="explore-theme">
+                <option value="">All themes</option>
+                <option value="beach">🏝 Beach</option>
+                <option value="europe">🗼 Europe</option>
+                <option value="asia">🗾 Asia</option>
+                <option value="us">🇺🇸 US</option>
+                <option value="canada">🍁 Canada</option>
+                <option value="adventure">🌋 Adventure</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="sublabel">Max price (CAD)</label>
+              <input id="explore-max" type="number" min="100" step="50" placeholder="Any" />
+            </div>
+            <div class="field">
+              <label class="sublabel">Month</label>
+              <select id="explore-month">
+                <option value="">Any month</option>
+                <option value="1">January</option><option value="2">February</option>
+                <option value="3">March</option><option value="4">April</option>
+                <option value="5">May</option><option value="6">June</option>
+                <option value="7">July</option><option value="8">August</option>
+                <option value="9">September</option><option value="10">October</option>
+                <option value="11">November</option><option value="12">December</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="explore-grid" class="explore-grid">
+            <p class="muted empty-msg">Loading destinations…</p>
+          </div>
+        </section>
+      </div><!-- /tab-explore -->
 
     </main>
 
@@ -199,7 +307,7 @@
           <div class="how-step-num">2</div>
           <div class="how-step-body">
             <h4>We search automatically</h4>
-            <p>Every 12 hours, we check Google Flights across 3 dates per month in your window — early, mid, and late month. That's up to 9 searches per alert per run.</p>
+            <p>Every 48 hours, we check Google Flights for your date (or your window). Turn on <strong>±3/±7 days</strong> flexibility to scan neighbour days — typically saves 15–30%. We also remember a rolling price history per route.</p>
           </div>
         </div>
 
@@ -222,8 +330,18 @@
         <div class="how-divider"></div>
 
         <div class="how-faq">
+          <h4>🔥 Deal Watcher vs threshold</h4>
+          <p><strong>Threshold mode</strong> pings you when the price drops below your budget. <strong>Deal Watcher mode</strong> skips the budget entirely — after ~1 week of learning, it emails whenever a price appears ≥5% below the route's typical low. Great if you don't know what a fair price is.</p>
+        </div>
+
+        <div class="how-faq">
           <h4>All-in vs base fare</h4>
           <p><strong>All-in price</strong> includes all taxes and fees — the total you actually pay. <strong>Base fare</strong> is before taxes (~15% added on top). Set your threshold to match how you like to think about prices.</p>
+        </div>
+
+        <div class="how-faq">
+          <h4>Explore mode</h4>
+          <p>Don't know where to go? The <strong>Explore</strong> tab shows the cheapest destinations from YYC, updated weekly. Filter by theme, budget, and month — then save one as an alert or book it directly.</p>
         </div>
 
         <div class="how-faq">

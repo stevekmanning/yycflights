@@ -67,6 +67,25 @@ try { db.exec(`ALTER TABLE alerts ADD COLUMN stops     INTEGER NOT NULL DEFAULT 
 try { db.exec(`ALTER TABLE alerts ADD COLUMN trip_type TEXT    NOT NULL DEFAULT 'round'`); } catch { /* already exists */ }
 try { db.exec(`ALTER TABLE alerts ADD COLUMN user_id   TEXT`);                             } catch { /* already exists */ }
 try { db.exec(`ALTER TABLE alerts ADD COLUMN taxes_included INTEGER NOT NULL DEFAULT 1`); } catch { /* already exists */ }
+// Feature 1 — flex date windows
+try { db.exec(`ALTER TABLE alerts ADD COLUMN target_date TEXT`);                           } catch { /* already exists */ }
+try { db.exec(`ALTER TABLE alerts ADD COLUMN flex_days   INTEGER NOT NULL DEFAULT 0`);     } catch { /* already exists */ }
+// Feature 3 — Deal Watcher mode ('threshold' | 'deal')
+try { db.exec(`ALTER TABLE alerts ADD COLUMN alert_mode TEXT NOT NULL DEFAULT 'threshold'`); } catch { /* already exists */ }
+
+// Feature 4 — Explore baselines (popular YYC destinations precomputed weekly)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS destination_baselines (
+    iata          TEXT PRIMARY KEY,
+    dest_label    TEXT NOT NULL,
+    theme         TEXT NOT NULL,
+    lowest_price  REAL,
+    lowest_date   TEXT,
+    airline       TEXT,
+    deep_link     TEXT,
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
@@ -78,7 +97,7 @@ export function listAlerts(userId) {
            (SELECT MIN(price) FROM flight_results WHERE alert_id = a.id) AS best_price
     FROM alerts a
     WHERE a.user_id = ?
-    ORDER BY a.created_at DESC
+    ORDER BY a.active DESC, a.created_at DESC
   `).all(userId);
 }
 
@@ -91,23 +110,30 @@ export function getAlert(id, userId = null) {
 
 export function createAlert(data) {
   const stmt = db.prepare(`
-    INSERT INTO alerts (destination, dest_label, month_start, month_end, threshold, email, book_by, stops, trip_type, user_id, taxes_included)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO alerts (
+      destination, dest_label, month_start, month_end, threshold, email,
+      book_by, stops, trip_type, user_id, taxes_included,
+      target_date, flex_days, alert_mode
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.destination, data.dest_label, data.month_start,
-    data.month_end, data.threshold, data.email,
+    data.month_end, data.threshold ?? 0, data.email,
     data.book_by  ?? null,
     data.stops    ?? 0,
     data.trip_type ?? 'round',
     data.user_id  ?? null,
-    data.taxes_included ?? 1
+    data.taxes_included ?? 1,
+    data.target_date ?? null,
+    data.flex_days   ?? 0,
+    data.alert_mode  ?? 'threshold'
   );
   return getAlert(Number(result.lastInsertRowid));
 }
 
 export function updateAlert(id, data) {
-  const allowed = ['destination','dest_label','month_start','month_end','threshold','email','active','book_by','stops','trip_type','taxes_included'];
+  const allowed = ['destination','dest_label','month_start','month_end','threshold','email','active','book_by','stops','trip_type','taxes_included','target_date','flex_days','alert_mode'];
   const fields  = Object.keys(data).filter(k => allowed.includes(k));
   if (!fields.length) return getAlert(id);
   const setClause = fields.map(f => `${f} = ?`).join(', ');
@@ -162,27 +188,6 @@ export function getPriceHistory(alertId) {
     GROUP BY substr(found_at, 1, 10)
     ORDER BY day ASC
   `).all(alertId);
-}
-
-export function getCheapestOverall(userId = null) {
-  if (userId) {
-    return db.prepare(`
-      SELECT fr.*, a.destination, a.dest_label, a.threshold
-      FROM flight_results fr
-      JOIN alerts a ON a.id = fr.alert_id
-      WHERE a.active = 1 AND a.user_id = ?
-      ORDER BY fr.price ASC
-      LIMIT 1
-    `).get(userId);
-  }
-  return db.prepare(`
-    SELECT fr.*, a.destination, a.dest_label, a.threshold
-    FROM flight_results fr
-    JOIN alerts a ON a.id = fr.alert_id
-    WHERE a.active = 1
-    ORDER BY fr.price ASC
-    LIMIT 1
-  `).get();
 }
 
 // Used by scheduler — fetches all active alerts regardless of user
@@ -268,6 +273,63 @@ export function unsubscribeDigest(email) {
   db.prepare(`
     UPDATE digest_tokens SET unsubscribed = 1 WHERE email = ?
   `).run(email);
+}
+
+// ── Deal Watcher ──────────────────────────────────────────────────────────────
+
+/**
+ * Compute the 10th-percentile historical price for an alert.
+ * Returns null if fewer than `minSamples` daily-low observations exist yet.
+ */
+export function getAlertPriceFloor(alertId, minSamples = 7) {
+  // Use one daily-low sample per day to avoid intraday noise
+  const rows = db.prepare(`
+    SELECT MIN(price) AS p
+    FROM flight_results
+    WHERE alert_id = ?
+    GROUP BY substr(found_at, 1, 10)
+    ORDER BY p ASC
+  `).all(alertId).map(r => r.p);
+
+  if (rows.length < minSamples) return null;
+  const idx = Math.max(0, Math.floor(rows.length * 0.10) - 1);
+  return {
+    p10:     Math.round(rows[idx]),
+    min:     Math.round(rows[0]),
+    median:  Math.round(rows[Math.floor(rows.length / 2)]),
+    samples: rows.length,
+  };
+}
+
+// ── Explore baselines ─────────────────────────────────────────────────────────
+
+export function upsertBaseline({ iata, dest_label, theme, lowest_price, lowest_date, airline, deep_link }) {
+  db.prepare(`
+    INSERT INTO destination_baselines (iata, dest_label, theme, lowest_price, lowest_date, airline, deep_link, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(iata) DO UPDATE SET
+      dest_label   = excluded.dest_label,
+      theme        = excluded.theme,
+      lowest_price = excluded.lowest_price,
+      lowest_date  = excluded.lowest_date,
+      airline      = excluded.airline,
+      deep_link    = excluded.deep_link,
+      updated_at   = datetime('now')
+  `).run(iata, dest_label, theme, lowest_price, lowest_date, airline ?? null, deep_link ?? null);
+}
+
+export function listBaselines({ theme = null, maxPrice = null, month = null } = {}) {
+  const clauses = ['lowest_price IS NOT NULL'];
+  const params  = [];
+  if (theme)    { clauses.push('theme = ?');       params.push(theme); }
+  if (maxPrice) { clauses.push('lowest_price <= ?'); params.push(maxPrice); }
+  if (month)    { clauses.push("CAST(substr(lowest_date, 6, 2) AS INTEGER) = ?"); params.push(month); }
+
+  return db.prepare(`
+    SELECT * FROM destination_baselines
+    WHERE ${clauses.join(' AND ')}
+    ORDER BY lowest_price ASC
+  `).all(...params);
 }
 
 export default db;
