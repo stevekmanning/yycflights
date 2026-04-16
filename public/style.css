@@ -134,6 +134,7 @@ header {
   position: sticky;
   top: 0;
   z-index: 100;
+  padding-top: env(safe-area-inset-top, 0);
 }
 
 .header-inner {
@@ -142,6 +143,8 @@ header {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
+  padding-left:  max(16px, env(safe-area-inset-left, 0));
+  padding-right: max(16px, env(safe-area-inset-right, 0));
   max-width: 1100px;
   margin: 0 auto;
 }
@@ -176,8 +179,14 @@ header {
   cursor: pointer;
   transition: color .15s, border-color .15s;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
 }
 .how-btn:hover { color: var(--text); border-color: var(--accent); }
+.how-btn-text { display: inline; }
+.how-btn-icon { display: none; font-weight: 700; font-size: .95rem; line-height: 1; }
 
 .user-btn {
   width: 36px;
@@ -204,7 +213,9 @@ header {
 main {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px 16px 100px;
+  padding: 16px 16px calc(100px + env(safe-area-inset-bottom, 0));
+  padding-left:  max(16px, env(safe-area-inset-left, 0));
+  padding-right: max(16px, env(safe-area-inset-right, 0));
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -1509,7 +1520,89 @@ select option { background: var(--surface2); }
 
 /* ── Mobile tweaks for top-nav on smaller screens ──────── */
 @media (max-width: 640px) {
-  .header-inner { flex-wrap: wrap; }
+  .header-inner { flex-wrap: wrap; padding: 10px 14px; }
   .top-nav { order: 3; width: 100%; margin-top: 8px; justify-content: center; }
-  .top-nav-btn { flex: 1; }
+  .top-nav-btn { flex: 1; min-height: 40px; }
+
+  /* Compact header: shrink logo text, swap "How it works" for "?" */
+  .logo { font-size: 1rem; gap: 6px; }
+  .plane { font-size: 1.1rem; }
+
+  .how-btn-text { display: none; }
+  .how-btn-icon { display: inline-flex; align-items: center; justify-content: center; }
+  .how-btn {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  /* 44×44 minimum tap targets */
+  .user-btn { width: 40px; height: 40px; }
+
+  /* Slightly tighter card padding on narrow phones */
+  .card { padding: 14px; }
+  main  { gap: 22px; }
+
+  /* Section header row: tighter spacing */
+  h2 { font-size: .98rem; }
+
+  /* Sticky Save/Clear at bottom on mobile so the primary action is always reachable */
+  .form-actions {
+    position: sticky;
+    bottom: env(safe-area-inset-bottom, 0);
+    z-index: 5;
+    margin: 18px -14px calc(-14px + env(safe-area-inset-bottom, 0));
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0));
+    background: linear-gradient(to top,
+      var(--surface) 70%,
+      rgba(26,29,39,0));
+    border-top: 1px solid var(--border);
+  }
+
+  /* Toggle buttons: a hair taller for comfortable tapping */
+  .toggle-btn { min-height: 44px; font-size: .78rem; padding: 8px 6px; }
+
+  /* Stacked sublabel inside toggle button — still visible but smaller */
+  .toggle-sub { font-size: .6rem; margin-top: 0; }
+
+  /* Calendar cells: smaller fonts, tighter spacing */
+  .preview-calendar { padding: 10px; }
+  .cal-grid { gap: 3px; }
+  .cal-dow  { gap: 3px; font-size: .62rem; }
+  .cal-day   { font-size: .55rem; }
+  .cal-price { font-size: .62rem; letter-spacing: -.02em; }
+
+  /* Explore grid: action buttons stack vertically for easier taps */
+  .explore-actions { flex-direction: column; gap: 8px; }
+  .explore-actions .btn { width: 100%; }
+  .explore-filters { padding: 10px; }
+  .explore-card-item { padding: 12px; }
+  .explore-price { font-size: 1.4rem; }
+
+  /* Why-this-price panel breathes better full-width */
+  .why-toggle { margin-left: 4px; font-size: .68rem; padding: 3px 8px; }
+  .why-item   { font-size: .75rem; }
+
+  /* Deal Watcher panel: compact */
+  .deal-watcher-panel { padding: 10px 12px; }
+  .deal-watcher-msg   { font-size: .82rem; }
+  .deal-watcher-tip   { font-size: .72rem; }
+
+  /* Drawer: safe-area bottom padding on content */
+  #drawer-content { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0)); }
+  .how-content    { padding-bottom: calc(32px + env(safe-area-inset-bottom, 0)); }
+}
+
+/* ── Extra-narrow phones (≤ 380px) ─────────────────────── */
+@media (max-width: 380px) {
+  .top-nav-btn { font-size: .78rem; padding: 6px 8px; }
+  .price-display { font-size: 1.7rem; }
+  .destination { font-size: 1.05rem; }
+  .cal-price { display: none; }  /* icon-only at tiny widths */
+  .cal-day   { font-size: .65rem; opacity: .9; }
+  h2 { font-size: .92rem; }
+  .section-label { font-size: .64rem; }
+  .btn { padding: 12px 14px; font-size: .9rem; }
 }

@@ -42,7 +42,10 @@
           <button class="top-nav-btn"        data-tab="explore" role="tab">Explore</button>
         </nav>
         <div class="header-right">
-          <button id="how-btn" class="how-btn" title="How it works">How it works</button>
+          <button id="how-btn" class="how-btn" title="How it works" aria-label="How it works">
+            <span class="how-btn-text">How it works</span>
+            <span class="how-btn-icon" aria-hidden="true">?</span>
+          </button>
           <button id="user-btn" class="user-btn" title="Sign out">
             <span id="user-initials">·</span>
           </button>
@@ -68,7 +71,7 @@
             <div class="section-label">Where to?</div>
             <div class="field">
               <div class="autocomplete-wrap">
-                <input id="dest-input" type="text" placeholder="City or airport…" required />
+                <input id="dest-input" type="search" inputmode="search" autocapitalize="words" autocomplete="off" placeholder="City or airport…" required />
                 <ul id="dest-suggestions" class="suggestions" hidden></ul>
                 <input id="dest-iata" type="hidden" required />
                 <input id="dest-label-hidden" type="hidden" required />
@@ -161,8 +164,13 @@
 
             <!-- Mode toggle -->
             <div class="toggle-group" id="mode-group" role="group" aria-label="Alert mode" style="margin-top:10px">
-              <button type="button" class="toggle-btn active" data-value="threshold">Below my price</button>
-              <button type="button" class="toggle-btn"        data-value="deal">🔥 Deal Watcher <span class="toggle-sub">(auto-learn)</span></button>
+              <button type="button" class="toggle-btn active" data-value="threshold">
+                <span class="toggle-main">Below my price</span>
+              </button>
+              <button type="button" class="toggle-btn" data-value="deal">
+                <span class="toggle-main">🔥 Deal Watcher</span>
+                <span class="toggle-sub">auto-learn</span>
+              </button>
             </div>
             <input id="alert-mode" type="hidden" value="threshold" />
 
@@ -171,7 +179,7 @@
               <label class="sublabel" style="margin-top:12px;display:block">Alert me when price drops below</label>
               <div class="threshold-row" style="margin-top:6px">
                 <span class="currency-label">CAD $</span>
-                <input id="threshold" type="number" min="1" step="1" placeholder="800" />
+                <input id="threshold" type="number" inputmode="numeric" pattern="[0-9]*" min="1" step="1" placeholder="800" />
               </div>
               <label class="sublabel" style="margin-top:12px;display:block">My budget is the</label>
               <div class="toggle-group" id="taxes-group" role="group" aria-label="Price type" style="margin-top:6px">
@@ -263,7 +271,7 @@
             </div>
             <div class="field">
               <label class="sublabel">Max price (CAD)</label>
-              <input id="explore-max" type="number" min="100" step="50" placeholder="Any" />
+              <input id="explore-max" type="number" inputmode="numeric" pattern="[0-9]*" min="100" step="50" placeholder="Any" />
             </div>
             <div class="field">
               <label class="sublabel">Month</label>
