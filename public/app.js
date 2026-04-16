@@ -88,6 +88,7 @@ function showApp(user) {
   loadAlerts();
   setupForm();
   setupDrawer();
+  setupHowDrawer();
 
   setInterval(loadAlerts, 120_000);
 }
@@ -377,13 +378,25 @@ async function fetchPreview() {
 }
 
 function renderPreview(results) {
-  const list = document.getElementById('preview-list');
+  const list        = document.getElementById('preview-list');
+  const taxesMode   = Number(document.getElementById('taxes-included').value); // 1=all-in, 0=base
+  const isBaseFare  = taxesMode === 0;
+
   if (!results.length) {
     list.innerHTML = '<p class="muted" style="font-size:.85rem">No flights found for this route/date range.</p>';
     return;
   }
-  list.innerHTML = '<p class="preview-hint-top">Tap a price to set it as your alert threshold:</p>';
+
+  const modeLabel = isBaseFare
+    ? '<span class="preview-mode-tag">Showing est. base fare (÷1.15)</span>'
+    : '<span class="preview-mode-tag">Showing all-in price (taxes included)</span>';
+
+  list.innerHTML = `<p class="preview-hint-top">Tap a price to set it as your alert threshold: ${modeLabel}</p>`;
+
   results.slice(0, 6).forEach(r => {
+    // All SerpApi prices are all-in. Divide by TAX_FACTOR to estimate base fare.
+    const displayPrice = isBaseFare ? r.price / TAX_FACTOR : r.price;
+
     const chip = document.createElement('div');
     chip.className = 'preview-chip';
     const dep = r.departure_at
@@ -391,7 +404,7 @@ function renderPreview(results) {
       : '—';
     chip.innerHTML = `
       <button type="button" class="preview-chip-select">
-        <span class="preview-price">$${r.price.toFixed(0)} CAD</span>
+        <span class="preview-price">$${displayPrice.toFixed(0)} CAD</span>
         <span class="preview-meta">${dep} · ${r.airline || 'Various airlines'}</span>
       </button>
       ${r.deep_link
@@ -399,7 +412,7 @@ function renderPreview(results) {
         : ''}
     `;
     chip.querySelector('.preview-chip-select').addEventListener('click', () => {
-      document.getElementById('threshold').value = r.price.toFixed(0);
+      document.getElementById('threshold').value = displayPrice.toFixed(0);
       list.querySelectorAll('.preview-chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');
     });
@@ -407,8 +420,10 @@ function renderPreview(results) {
   });
 }
 
+const TAX_FACTOR = 1.15; // approximate tax multiplier for display adjustment
+
 // ── Toggle groups ─────────────────────────────────────────────────────────────
-function setupToggleGroup(groupId, hiddenId) {
+function setupToggleGroup(groupId, hiddenId, onChange) {
   const group = document.getElementById(groupId);
   if (!group) return;
   group.addEventListener('click', e => {
@@ -417,15 +432,16 @@ function setupToggleGroup(groupId, hiddenId) {
     group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(hiddenId).value = btn.dataset.value;
+    onChange?.(btn.dataset.value);
   });
 }
 
 // ── Form ──────────────────────────────────────────────────────────────────────
 function setupForm() {
   const form = document.getElementById('alert-form');
-  setupToggleGroup('trip-type-group', 'trip-type');
-  setupToggleGroup('stops-group', 'stops');
-  setupToggleGroup('taxes-group', 'taxes-included');
+  setupToggleGroup('trip-type-group', 'trip-type', () => { if (selectedDest) setTimeout(fetchPreview, 300); });
+  setupToggleGroup('stops-group',     'stops',     () => { if (selectedDest) setTimeout(fetchPreview, 300); });
+  setupToggleGroup('taxes-group',     'taxes-included', () => { if (previewResults.length) renderPreview(previewResults); });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -482,11 +498,31 @@ function setupForm() {
 function showFormError(msg) { const el = document.getElementById('form-error'); el.textContent = msg; el.hidden = false; }
 function hideFormError()    { document.getElementById('form-error').hidden = true; }
 
+// ── How It Works drawer ───────────────────────────────────────────────────────
+function setupHowDrawer() {
+  const howDrawer = document.getElementById('how-drawer');
+  document.getElementById('how-btn').addEventListener('click', () => {
+    howDrawer.hidden = false;
+    document.getElementById('overlay').hidden = false;
+    document.body.style.overflow = 'hidden';
+  });
+  document.getElementById('how-drawer-close').addEventListener('click', closeHowDrawer);
+}
+
+function closeHowDrawer() {
+  document.getElementById('how-drawer').hidden = true;
+  // Only clear overlay if results drawer is also closed
+  if (document.getElementById('results-drawer').hidden) {
+    document.getElementById('overlay').hidden = true;
+    document.body.style.overflow = '';
+  }
+}
+
 // ── Drawer ────────────────────────────────────────────────────────────────────
 function setupDrawer() {
   document.getElementById('drawer-close').addEventListener('click', closeDrawer);
-  document.getElementById('overlay').addEventListener('click', closeDrawer);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+  document.getElementById('overlay').addEventListener('click', () => { closeDrawer(); closeHowDrawer(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeHowDrawer(); } });
 }
 
 function openDrawer(title, contentHtml) {
@@ -499,8 +535,11 @@ function openDrawer(title, contentHtml) {
 
 function closeDrawer() {
   document.getElementById('results-drawer').hidden = true;
-  document.getElementById('overlay').hidden        = true;
-  document.body.style.overflow = '';
+  // Only hide overlay if how-drawer is also closed
+  if (document.getElementById('how-drawer').hidden) {
+    document.getElementById('overlay').hidden = true;
+    document.body.style.overflow = '';
+  }
 }
 
 // ── History drawer ────────────────────────────────────────────────────────────

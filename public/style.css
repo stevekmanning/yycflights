@@ -164,6 +164,21 @@ header {
   gap: 10px;
 }
 
+.how-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: .8rem;
+  font-weight: 500;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.how-btn:hover { color: var(--text); border-color: var(--accent); }
+
 .user-btn {
   width: 36px;
   height: 36px;
@@ -215,6 +230,47 @@ h3 { font-size: .95rem; font-weight: 600; }
 
 /* ── Form card ───────────────────────────────────────────── */
 .form-card { margin-bottom: 0; }
+
+/* ── Form sections (visual grouping) ────────────────────── */
+.form-section {
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+.form-section:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.section-label {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  display: block;
+}
+
+.section-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+}
+.section-label-row .section-label { margin-bottom: 0; }
+
+.optional-tag {
+  font-size: .65rem;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  vertical-align: middle;
+}
 
 /* ── Form fields ─────────────────────────────────────────── */
 .form-row { margin-bottom: 14px; }
@@ -753,6 +809,18 @@ select option { background: var(--surface2); }
   margin-bottom: 6px;
 }
 
+.preview-mode-tag {
+  display: inline-block;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: .7rem;
+  color: var(--muted);
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 /* ── Trend & advice ──────────────────────────────────────── */
 .trend-line {
   font-size: .78rem;
@@ -869,6 +937,72 @@ select option { background: var(--surface2); }
   overflow-y: auto;
   padding: 16px;
   -webkit-overflow-scrolling: touch;
+}
+
+/* ── How It Works drawer ─────────────────────────────────── */
+.how-drawer { z-index: 410; } /* above results drawer */
+
+.how-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px 32px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.how-step {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.how-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.how-step-body h4 {
+  font-size: .95rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.how-step-body p {
+  font-size: .875rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.how-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 8px 0 24px;
+}
+
+.how-faq {
+  margin-bottom: 20px;
+  padding: 14px;
+  background: var(--surface2);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.how-faq h4 {
+  font-size: .875rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.how-faq p {
+  font-size: .82rem;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 /* ── Results table ───────────────────────────────────────── */

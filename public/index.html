@@ -37,9 +37,12 @@
           <span class="plane">✈</span>
           <span>YYC Flights</span>
         </div>
-        <button id="user-btn" class="user-btn" title="Sign out">
-          <span id="user-initials">·</span>
-        </button>
+        <div class="header-right">
+          <button id="how-btn" class="how-btn" title="How it works">How it works</button>
+          <button id="user-btn" class="user-btn" title="Sign out">
+            <span id="user-initials">·</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -49,119 +52,119 @@
       <section class="card form-card">
         <form id="alert-form" autocomplete="off">
 
-  <!-- Destination -->
-  <div class="form-row">
-    <div class="field">
-      <label for="dest-input">Destination</label>
-      <div class="autocomplete-wrap">
-        <input id="dest-input" type="text" placeholder="City or airport…" required />
-        <ul id="dest-suggestions" class="suggestions" hidden></ul>
-        <input id="dest-iata" type="hidden" required />
-        <input id="dest-label-hidden" type="hidden" required />
-      </div>
-    </div>
-  </div>
+          <!-- ① Destination -->
+          <div class="form-section">
+            <div class="section-label">Where to?</div>
+            <div class="field">
+              <div class="autocomplete-wrap">
+                <input id="dest-input" type="text" placeholder="City or airport…" required />
+                <ul id="dest-suggestions" class="suggestions" hidden></ul>
+                <input id="dest-iata" type="hidden" required />
+                <input id="dest-label-hidden" type="hidden" required />
+              </div>
+            </div>
+          </div>
 
-  <!-- Trip type + Stops -->
-  <div class="form-row two-col">
-    <div class="field">
-      <label>Trip type</label>
-      <div class="toggle-group" id="trip-type-group" role="group" aria-label="Trip type">
-        <button type="button" class="toggle-btn active" data-value="round">Round trip</button>
-        <button type="button" class="toggle-btn" data-value="oneway">One way</button>
-      </div>
-      <input id="trip-type" type="hidden" value="round" />
-    </div>
-    <div class="field">
-      <label>Stops</label>
-      <div class="toggle-group" id="stops-group" role="group" aria-label="Stops">
-        <button type="button" class="toggle-btn active" data-value="0">Any</button>
-        <button type="button" class="toggle-btn" data-value="1">Non-stop</button>
-        <button type="button" class="toggle-btn" data-value="2">≤1 stop</button>
-        <button type="button" class="toggle-btn" data-value="3">≤2 stops</button>
-      </div>
-      <input id="stops" type="hidden" value="0" />
-    </div>
-  </div>
+          <!-- ② Flight preferences -->
+          <div class="form-section">
+            <div class="section-label">Flight preferences</div>
+            <div class="two-col">
+              <div class="field">
+                <label class="sublabel">Trip type</label>
+                <div class="toggle-group" id="trip-type-group" role="group" aria-label="Trip type">
+                  <button type="button" class="toggle-btn active" data-value="round">Round trip</button>
+                  <button type="button" class="toggle-btn" data-value="oneway">One way</button>
+                </div>
+                <input id="trip-type" type="hidden" value="round" />
+              </div>
+              <div class="field">
+                <label class="sublabel">Stops</label>
+                <div class="toggle-group" id="stops-group" role="group" aria-label="Stops">
+                  <button type="button" class="toggle-btn active" data-value="0">Any</button>
+                  <button type="button" class="toggle-btn" data-value="1">Non-stop</button>
+                  <button type="button" class="toggle-btn" data-value="2">≤1 stop</button>
+                  <button type="button" class="toggle-btn" data-value="3">≤2 stops</button>
+                </div>
+                <input id="stops" type="hidden" value="0" />
+              </div>
+            </div>
+          </div>
 
-  <!-- Travel window -->
-  <div class="form-row">
-    <div class="field-header">
-      <label>When do you want to fly?</label>
-      <span class="tip" data-tip="The wider your travel window, the more departure dates we check — which typically means better prices.">?</span>
-    </div>
-    <div class="two-col" style="margin-top:8px">
-      <div class="field">
-        <label class="sublabel">Earliest month</label>
-        <div class="month-year-wrap">
-          <select id="month-start" required></select>
-          <select id="year-start"></select>
-        </div>
-      </div>
-      <div class="field">
-        <label class="sublabel">Latest month</label>
-        <div class="month-year-wrap">
-          <select id="month-end" required></select>
-          <select id="year-end"></select>
-        </div>
-      </div>
-    </div>
-  </div>
+          <!-- ③ Travel window -->
+          <div class="form-section">
+            <div class="section-label-row">
+              <span class="section-label">When do you want to fly?</span>
+              <span class="tip" data-tip="The wider your travel window, the more departure dates we check — which typically means better prices.">?</span>
+            </div>
+            <div class="two-col" style="margin-top:10px">
+              <div class="field">
+                <label class="sublabel">Earliest</label>
+                <div class="month-year-wrap">
+                  <select id="month-start" required></select>
+                  <select id="year-start"></select>
+                </div>
+              </div>
+              <div class="field">
+                <label class="sublabel">Latest</label>
+                <div class="month-year-wrap">
+                  <select id="month-end" required></select>
+                  <select id="year-end"></select>
+                </div>
+              </div>
+            </div>
+          </div>
 
-  <!-- Price threshold -->
-  <div class="form-row">
-    <div class="field-header">
-      <label>Alert me when price drops below</label>
-      <span class="tip" data-tip="Per person, for your selected trip type. We check prices 3 times per month across your travel window.">?</span>
-    </div>
-    <div class="threshold-row">
-      <span class="currency-label">CAD $</span>
-      <input id="threshold" type="number" min="1" step="1" placeholder="800" required />
-    </div>
-    <div style="margin-top:10px">
-      <label class="sublabel">My budget is the</label>
-      <div class="toggle-group" id="taxes-group" role="group" aria-label="Price type" style="margin-top:6px">
-        <button type="button" class="toggle-btn active" data-value="1">All-in price <span class="toggle-sub">(taxes &amp; fees included)</span></button>
-        <button type="button" class="toggle-btn" data-value="0">Base fare <span class="toggle-sub">(before taxes)</span></button>
-      </div>
-      <input id="taxes-included" type="hidden" value="1" />
-    </div>
-  </div>
+          <!-- ④ Price alert -->
+          <div class="form-section">
+            <div class="section-label-row">
+              <span class="section-label">Price alert</span>
+              <span class="tip" data-tip="Per person, for your selected trip type. We check prices 3 times per month across your travel window.">?</span>
+            </div>
+            <label class="sublabel" style="margin-top:10px;display:block">Alert me when price drops below</label>
+            <div class="threshold-row" style="margin-top:6px">
+              <span class="currency-label">CAD $</span>
+              <input id="threshold" type="number" min="1" step="1" placeholder="800" required />
+            </div>
+            <label class="sublabel" style="margin-top:12px;display:block">My budget is the</label>
+            <div class="toggle-group" id="taxes-group" role="group" aria-label="Price type" style="margin-top:6px">
+              <button type="button" class="toggle-btn active" data-value="1">All-in price <span class="toggle-sub">(taxes &amp; fees included)</span></button>
+              <button type="button" class="toggle-btn" data-value="0">Base fare <span class="toggle-sub">(before taxes)</span></button>
+            </div>
+            <input id="taxes-included" type="hidden" value="1" />
+          </div>
 
-  <!-- Book by -->
-  <div class="form-row">
-    <div class="field">
-      <div class="field-header">
-        <label for="book-by">I need to book by</label>
-        <span class="tip" data-tip="Optional deadline. We'll factor this into our booking advice and skip checking after this date.">?</span>
-      </div>
-      <div class="date-pick-wrap" style="margin-top:8px">
-        <input id="book-by" type="date" class="date-pick-hidden" tabindex="-1" aria-hidden="true" />
-        <button type="button" id="book-by-btn" class="date-pick-btn">
-          <span id="book-by-label">No deadline</span>
-          <span class="date-pick-icon">📅</span>
-        </button>
-        <button type="button" id="book-by-clear" class="date-pick-clear" hidden title="Clear date">✕</button>
-      </div>
-    </div>
-  </div>
+          <!-- ⑤ Booking deadline (optional) -->
+          <div class="form-section">
+            <div class="section-label-row">
+              <span class="section-label">Booking deadline <span class="optional-tag">optional</span></span>
+              <span class="tip" data-tip="We'll factor this into our booking advice and stop checking after this date.">?</span>
+            </div>
+            <div class="date-pick-wrap" style="margin-top:10px">
+              <input id="book-by" type="date" class="date-pick-hidden" tabindex="-1" aria-hidden="true" />
+              <button type="button" id="book-by-btn" class="date-pick-btn">
+                <span id="book-by-label">No deadline set</span>
+                <span class="date-pick-icon">📅</span>
+              </button>
+              <button type="button" id="book-by-clear" class="date-pick-clear" hidden title="Clear date">✕</button>
+            </div>
+          </div>
 
-  <!-- Actions -->
-  <div class="form-actions">
-    <button type="submit" class="btn btn-primary">Save alert</button>
-  </div>
+          <!-- Actions -->
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save alert</button>
+          </div>
 
-  <!-- Auto-preview results -->
-  <div id="preview-section" hidden>
-    <div class="preview-header">
-      <span class="preview-title">Current prices</span>
-      <span class="muted preview-hint">Tap a price to use as your threshold</span>
-    </div>
-    <div id="preview-list" class="preview-list"></div>
-  </div>
+          <!-- Auto-preview results -->
+          <div id="preview-section" hidden>
+            <div class="preview-header">
+              <span class="preview-title">Current prices</span>
+              <span class="muted preview-hint">Tap a price to use as your threshold</span>
+            </div>
+            <div id="preview-list" class="preview-list"></div>
+          </div>
 
-  <p id="form-error" class="error-msg" hidden></p>
-</form>
+          <p id="form-error" class="error-msg" hidden></p>
+        </form>
       </section>
 
       <!-- Active Alerts -->
@@ -173,6 +176,66 @@
       </section>
 
     </main>
+
+    <!-- How It Works Drawer -->
+    <div id="how-drawer" class="drawer how-drawer" hidden>
+      <div class="drawer-header">
+        <h3>How it works</h3>
+        <button id="how-drawer-close" class="btn-icon" aria-label="Close">&times;</button>
+      </div>
+      <div class="how-content">
+
+        <div class="how-step">
+          <div class="how-step-num">1</div>
+          <div class="how-step-body">
+            <h4>Set a price alert</h4>
+            <p>Choose a destination from YYC, pick your travel window and the max price you want to pay. You can set up to 5 alerts.</p>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">2</div>
+          <div class="how-step-body">
+            <h4>We search automatically</h4>
+            <p>Every 12 hours, we check Google Flights across 3 dates per month in your window — early, mid, and late month. That's up to 9 searches per alert per run.</p>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">3</div>
+          <div class="how-step-body">
+            <h4>Get an email when prices drop</h4>
+            <p>The moment a price falls below your threshold, we send you an email with the fare and a direct link to book it on Google Flights.</p>
+          </div>
+        </div>
+
+        <div class="how-step">
+          <div class="how-step-num">4</div>
+          <div class="how-step-body">
+            <h4>Track trends &amp; get advice</h4>
+            <p>After 5+ price checks, we show you whether prices are rising or falling and give a buy/wait recommendation. Open <strong>Analysis</strong> on any alert card to see the full breakdown.</p>
+          </div>
+        </div>
+
+        <div class="how-divider"></div>
+
+        <div class="how-faq">
+          <h4>All-in vs base fare</h4>
+          <p><strong>All-in price</strong> includes all taxes and fees — the total you actually pay. <strong>Base fare</strong> is before taxes (~15% added on top). Set your threshold to match how you like to think about prices.</p>
+        </div>
+
+        <div class="how-faq">
+          <h4>Booking deadline</h4>
+          <p>If you add a deadline, we factor it into the advice (e.g. "only 4 days left — buy now") and automatically stop checking after that date.</p>
+        </div>
+
+        <div class="how-faq">
+          <h4>Can I book directly?</h4>
+          <p>Yes — every price in the preview and in email alerts includes a <strong>Book ↗</strong> link that takes you straight to Google Flights with the exact search pre-filled.</p>
+        </div>
+
+      </div>
+    </div>
 
     <!-- Results Drawer -->
     <div id="results-drawer" class="drawer" hidden>
