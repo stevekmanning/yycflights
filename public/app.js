@@ -168,6 +168,7 @@ function buildAlertCard(alert) {
   const STOPS_LABEL = { 0: 'Any stops', 1: 'Non-stop', 2: '≤1 stop', 3: '≤2 stops' };
   const stopsLabel  = STOPS_LABEL[alert.stops ?? 0] ?? 'Any stops';
   const tripLabel   = alert.trip_type === 'oneway' ? 'One way' : 'Round trip';
+  const priceLabel  = alert.taxes_included === 0 ? 'base fare' : 'all-in';
 
   const card = document.createElement('div');
   card.className = 'alert-card';
@@ -177,7 +178,7 @@ function buildAlertCard(alert) {
     <div class="card-top">
       <div class="destination">YYC → ${alert.dest_label}</div>
       <div class="route-label">${monthRange} · ${tripLabel} · ${stopsLabel}</div>
-      <div class="route-label">Alert below $${threshold} CAD</div>
+      <div class="route-label">Alert below $${threshold} CAD/person · ${priceLabel}</div>
       ${alert.book_by ? `<div class="deadline-row"><span class="deadline-badge">Book by ${formatDate(alert.book_by)}</span></div>` : ''}
     </div>
     <div class="card-price">
@@ -192,14 +193,12 @@ function buildAlertCard(alert) {
     <div class="card-actions">
       <button class="btn btn-sm btn-ghost check-btn"    data-id="${alert.id}">Check now</button>
       <button class="btn btn-sm btn-ghost analysis-btn" data-id="${alert.id}">Analysis</button>
-      <button class="btn btn-sm btn-ghost history-btn"  data-id="${alert.id}">History</button>
       <button class="btn btn-sm btn-danger delete-btn"  data-id="${alert.id}">Delete</button>
     </div>
   `;
 
   card.querySelector('.check-btn').addEventListener('click',    () => triggerCheck(alert.id));
   card.querySelector('.analysis-btn').addEventListener('click', () => openAnalysis(alert.id, alert.dest_label));
-  card.querySelector('.history-btn').addEventListener('click',  () => openHistory(alert.id, alert.dest_label));
   card.querySelector('.delete-btn').addEventListener('click',   () => deleteAlert(alert.id));
 
   setTimeout(() => loadAdviceChip(alert.id), 0);
@@ -212,7 +211,7 @@ async function loadAdviceChip(alertId) {
   if (!trendEl || !adviceEl) return;
   try {
     const { trend, advice } = await api(`/api/alerts/${alertId}/analysis`);
-    if (trend) {
+    if (trend && trend.observations >= 5) {
       const arrowMap = { rising: '▲', falling: '▼', stable: '→' };
       const classMap = { rising: 'trend-rising', falling: 'trend-falling', stable: 'trend-stable' };
       trendEl.innerHTML = `
@@ -266,6 +265,13 @@ destInput?.addEventListener('input', () => {
 });
 destInput?.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
 
+// Re-fetch preview when month range changes (if dest already selected)
+['month-start', 'month-end'].forEach(id => {
+  document.getElementById(id)?.addEventListener('change', () => {
+    if (selectedDest) setTimeout(fetchPreview, 300);
+  });
+});
+
 async function fetchSuggestions(q) {
   try {
     const results = await fetch(`/api/destinations/search?q=${encodeURIComponent(q)}`).then(r => r.json());
@@ -292,10 +298,12 @@ function selectDest(item) {
   destLabelEl.value = item.cityName || item.name;
   hideSuggestions();
   updatePreviewBtn();
+  // Auto-preview as soon as destination is chosen
+  setTimeout(fetchPreview, 300);
 }
 
 function hideSuggestions() { suggestions.hidden = true; suggestions.innerHTML = ''; }
-function updatePreviewBtn() { document.getElementById('preview-btn').disabled = !selectedDest; }
+function updatePreviewBtn() { /* preview-btn removed; no-op */ }
 
 // ── Preview prices ────────────────────────────────────────────────────────────
 async function fetchPreview() {
@@ -306,12 +314,9 @@ async function fetchPreview() {
   const tripType   = document.getElementById('trip-type').value;
   const section    = document.getElementById('preview-section');
   const list       = document.getElementById('preview-list');
-  const btn        = document.getElementById('preview-btn');
 
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Fetching…';
   section.hidden = false;
-  list.innerHTML = '<span class="spinner"></span>';
+  list.innerHTML = '<div class="preview-loading"><span class="spinner"></span> Finding prices…</div>';
 
   try {
     const results = await api(
@@ -321,9 +326,6 @@ async function fetchPreview() {
     renderPreview(results);
   } catch (err) {
     list.innerHTML = `<p class="error-msg">${err.message}</p>`;
-  } finally {
-    btn.disabled  = false;
-    btn.innerHTML = 'Refresh prices';
   }
 }
 
@@ -370,9 +372,9 @@ function setupToggleGroup(groupId, hiddenId) {
 // ── Form ──────────────────────────────────────────────────────────────────────
 function setupForm() {
   const form = document.getElementById('alert-form');
-  document.getElementById('preview-btn').addEventListener('click', fetchPreview);
   setupToggleGroup('trip-type-group', 'trip-type');
   setupToggleGroup('stops-group', 'stops');
+  setupToggleGroup('taxes-group', 'taxes-included');
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -390,9 +392,10 @@ function setupForm() {
       month_end:   Number(document.getElementById('month-end').value),
       threshold:   Number(document.getElementById('threshold').value),
       email:       userEmail,
-      book_by:     document.getElementById('book-by').value || null,
-      stops:       Number(document.getElementById('stops').value),
-      trip_type:   document.getElementById('trip-type').value,
+      book_by:        document.getElementById('book-by').value || null,
+      stops:          Number(document.getElementById('stops').value),
+      trip_type:      document.getElementById('trip-type').value,
+      taxes_included: Number(document.getElementById('taxes-included').value),
     };
 
     const btn = form.querySelector('[type=submit]');
@@ -409,17 +412,18 @@ function setupForm() {
       document.getElementById('preview-section').hidden = true;
       document.getElementById('trip-type').value = 'round';
       document.getElementById('stops').value = '0';
+      document.getElementById('taxes-included').value = '1';
       document.querySelectorAll('.toggle-group').forEach(g => {
         g.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
       });
+      document.getElementById('taxes-group')?.querySelectorAll('.toggle-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
       previewResults = [];
-      updatePreviewBtn();
       await triggerCheck(alert.id);
     } catch (err) {
       showFormError(err.message);
     } finally {
       btn.disabled  = false;
-      btn.innerHTML = 'Save &amp; check now';
+      btn.innerHTML = 'Save alert';
     }
   });
 }

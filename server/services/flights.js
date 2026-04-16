@@ -18,9 +18,19 @@ function fmtDate(date) {
 }
 
 /**
- * Build candidate departure dates for a month range.
- * Returns the first Monday of each month in [monthStart, monthEnd],
- * skipping any dates in the past.
+ * Get the first Monday on or after a given date.
+ */
+function firstMondayOnOrAfter(date) {
+  const d   = new Date(date);
+  const dow = d.getDay();
+  const add = dow === 1 ? 0 : (8 - dow) % 7;
+  d.setDate(d.getDate() + add);
+  return d;
+}
+
+/**
+ * Build candidate departure dates: 3 per month (early / mid / late),
+ * all landing on Mondays for consistent pricing. Skips past dates.
  */
 function candidateDates(monthStart, monthEnd) {
   const today = new Date();
@@ -31,26 +41,22 @@ function candidateDates(monthStart, monthEnd) {
   if (monthStart <= monthEnd) {
     for (let m = monthStart; m <= monthEnd; m++) months.push(m);
   } else {
-    // Range wraps year boundary (e.g. Nov–Feb)
     for (let m = monthStart; m <= 12; m++) months.push(m);
     for (let m = 1; m <= monthEnd; m++) months.push(m);
   }
 
   for (const m of months) {
-    const candidateYear = m <= today.getMonth() + 1 ? year + 1 : year;
-    const date = firstMondayOfMonth(candidateYear, m);
-    if (date > today) dates.push(fmtDate(date));
+    const y = m < today.getMonth() + 1 ? year + 1 : year;
+    // Early (day 1), mid (day 13), late (day 20)
+    const seeds = [new Date(y, m - 1, 1), new Date(y, m - 1, 13), new Date(y, m - 1, 20)];
+    for (const seed of seeds) {
+      const d = firstMondayOnOrAfter(seed);
+      const str = fmtDate(d);
+      if (d > today && !dates.includes(str)) dates.push(str);
+    }
   }
 
   return dates;
-}
-
-function firstMondayOfMonth(year, month) {
-  const d = new Date(year, month - 1, 1);
-  const dow = d.getDay(); // 0=Sun … 6=Sat
-  const daysToMonday = dow === 1 ? 0 : (8 - dow) % 7;
-  d.setDate(1 + daysToMonday);
-  return d;
 }
 
 /**

@@ -18,8 +18,9 @@ const AlertSchema = z.object({
   threshold:   z.number().positive(),
   email:       z.string().email(),
   book_by:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  stops:       z.number().int().min(0).max(3).optional().default(0),
-  trip_type:   z.enum(['round', 'oneway']).optional().default('round'),
+  stops:         z.number().int().min(0).max(3).optional().default(0),
+  trip_type:     z.enum(['round', 'oneway']).optional().default('round'),
+  taxes_included: z.number().int().min(0).max(1).optional().default(1),
 });
 
 // GET /api/alerts

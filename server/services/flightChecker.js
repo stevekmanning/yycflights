@@ -1,4 +1,4 @@
-import { listAlerts, insertResult, touchAlertChecked, wasNotifiedRecently, recordNotification } from '../db.js';
+import { listAllActiveAlerts, insertResult, touchAlertChecked, wasNotifiedRecently, recordNotification } from '../db.js';
 import { searchFlights } from './flights.js';
 import { sendAlert } from '../mailer.js';
 
@@ -46,8 +46,14 @@ export async function checkOneAlert(alert, { force = false } = {}) {
 
   let alerted = false;
 
-  // Check if cheapest offer is below threshold
-  if (cheapestOffer.price < alert.threshold) {
+  // Adjust effective threshold: if user set a base-fare budget, SerpApi returns
+  // all-in price (taxes included), so we gross up by ~15% for comparison.
+  const TAX_FACTOR = 1.15;
+  const effectiveThreshold = (alert.taxes_included === 0)
+    ? alert.threshold * TAX_FACTOR
+    : alert.threshold;
+
+  if (cheapestOffer.price < effectiveThreshold) {
     if (!wasNotifiedRecently(alert.id)) {
       try {
         await sendAlert({ alert, result: cheapestOffer });
@@ -69,11 +75,17 @@ export async function checkOneAlert(alert, { force = false } = {}) {
  * Returns { checked, alerted }.
  */
 export async function runAllChecks() {
-  const alerts = listAlerts().filter(a => a.active);
+  const today  = new Date().toISOString().slice(0, 10);
+  const alerts = listAllActiveAlerts();
   let checked  = 0;
   let alerted  = 0;
 
   for (const alert of alerts) {
+    // Auto-skip expired alerts (book_by date has passed)
+    if (alert.book_by && alert.book_by < today) {
+      console.log(`[flightChecker] Skipping alert ${alert.id} (${alert.dest_label}) — book_by ${alert.book_by} has passed`);
+      continue;
+    }
     try {
       const result = await checkOneAlert(alert, { force: true });
       checked++;

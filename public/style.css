@@ -313,6 +313,121 @@ select option { background: var(--surface2); }
 .toggle-btn:hover       { background: var(--surface); color: var(--text); }
 .toggle-btn.active      { background: var(--accent); color: #fff; font-weight: 600; }
 
+/* ── Tooltips ────────────────────────────────────────────────────────────────── */
+.field-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+}
+
+.field-header label { margin-bottom: 0; }
+
+.tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .65rem;
+  font-weight: 700;
+  cursor: help;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: .78rem;
+  color: var(--text);
+  white-space: normal;
+  width: 220px;
+  line-height: 1.45;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 300;
+  text-align: left;
+  font-weight: 400;
+  box-shadow: var(--shadow);
+}
+
+.tip:hover::after,
+.tip:focus::after { opacity: 1; }
+
+/* ── Threshold row ───────────────────────────────────────── */
+.threshold-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 8px;
+}
+
+.currency-label {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  padding: 12px 14px;
+  font-size: .9rem;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+}
+
+.threshold-row input {
+  border-radius: 0 8px 8px 0;
+  flex: 1;
+}
+
+/* ── Sub-labels ──────────────────────────────────────────── */
+.sublabel {
+  font-size: .72rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* ── Toggle sub-text ─────────────────────────────────────── */
+.toggle-sub {
+  display: block;
+  font-size: .65rem;
+  font-weight: 400;
+  color: inherit;
+  opacity: 0.75;
+  margin-top: 1px;
+}
+
+.toggle-btn.active .toggle-sub { opacity: 0.9; }
+
+/* ── Preview loading ─────────────────────────────────────── */
+.preview-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: .875rem;
+  padding: 8px 0;
+}
+
 /* ── Autocomplete ────────────────────────────────────────── */
 .autocomplete-wrap { position: relative; }
 

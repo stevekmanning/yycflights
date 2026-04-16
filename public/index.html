@@ -48,76 +48,106 @@
       <section class="card form-card">
         <form id="alert-form" autocomplete="off">
 
-          <div class="form-row">
-            <div class="field">
-              <label for="dest-input">Destination</label>
-              <div class="autocomplete-wrap">
-                <input id="dest-input" type="text" placeholder="City or airport…" required />
-                <ul id="dest-suggestions" class="suggestions" hidden></ul>
-                <input id="dest-iata" type="hidden" required />
-                <input id="dest-label-hidden" type="hidden" required />
-              </div>
-            </div>
-          </div>
+  <!-- Destination -->
+  <div class="form-row">
+    <div class="field">
+      <label for="dest-input">Destination</label>
+      <div class="autocomplete-wrap">
+        <input id="dest-input" type="text" placeholder="City or airport…" required />
+        <ul id="dest-suggestions" class="suggestions" hidden></ul>
+        <input id="dest-iata" type="hidden" required />
+        <input id="dest-label-hidden" type="hidden" required />
+      </div>
+    </div>
+  </div>
 
-          <div class="form-row two-col">
-            <div class="field">
-              <label>Trip type</label>
-              <div class="toggle-group" id="trip-type-group" role="group" aria-label="Trip type">
-                <button type="button" class="toggle-btn active" data-value="round">Round trip</button>
-                <button type="button" class="toggle-btn" data-value="oneway">One way</button>
-              </div>
-              <input id="trip-type" type="hidden" value="round" />
-            </div>
-            <div class="field">
-              <label>Stops</label>
-              <div class="toggle-group" id="stops-group" role="group" aria-label="Stops">
-                <button type="button" class="toggle-btn active" data-value="0">Any</button>
-                <button type="button" class="toggle-btn" data-value="1">Non-stop</button>
-                <button type="button" class="toggle-btn" data-value="2">≤1 stop</button>
-                <button type="button" class="toggle-btn" data-value="3">≤2 stops</button>
-              </div>
-              <input id="stops" type="hidden" value="0" />
-            </div>
-          </div>
+  <!-- Trip type + Stops -->
+  <div class="form-row two-col">
+    <div class="field">
+      <label>Trip type</label>
+      <div class="toggle-group" id="trip-type-group" role="group" aria-label="Trip type">
+        <button type="button" class="toggle-btn active" data-value="round">Round trip</button>
+        <button type="button" class="toggle-btn" data-value="oneway">One way</button>
+      </div>
+      <input id="trip-type" type="hidden" value="round" />
+    </div>
+    <div class="field">
+      <label>Stops</label>
+      <div class="toggle-group" id="stops-group" role="group" aria-label="Stops">
+        <button type="button" class="toggle-btn active" data-value="0">Any</button>
+        <button type="button" class="toggle-btn" data-value="1">Non-stop</button>
+        <button type="button" class="toggle-btn" data-value="2">≤1 stop</button>
+        <button type="button" class="toggle-btn" data-value="3">≤2 stops</button>
+      </div>
+      <input id="stops" type="hidden" value="0" />
+    </div>
+  </div>
 
-          <div class="form-row three-col">
-            <div class="field">
-              <label for="month-start">From</label>
-              <select id="month-start" required></select>
-            </div>
-            <div class="field">
-              <label for="month-end">To</label>
-              <select id="month-end" required></select>
-            </div>
-            <div class="field">
-              <label for="threshold">Alert below (CAD $)</label>
-              <input id="threshold" type="number" min="1" step="1" placeholder="500" required />
-            </div>
-          </div>
+  <!-- Travel window -->
+  <div class="form-row">
+    <div class="field-header">
+      <label>When do you want to fly?</label>
+      <span class="tip" data-tip="The wider your travel window, the more departure dates we check — which typically means better prices.">?</span>
+    </div>
+    <div class="two-col" style="margin-top:8px">
+      <div class="field">
+        <label class="sublabel">Earliest month</label>
+        <select id="month-start" required></select>
+      </div>
+      <div class="field">
+        <label class="sublabel">Latest month</label>
+        <select id="month-end" required></select>
+      </div>
+    </div>
+  </div>
 
-          <div class="form-row">
-            <div class="field">
-              <label for="book-by">Book by <span class="label-optional">(optional)</span></label>
-              <input id="book-by" type="date" />
-            </div>
-          </div>
+  <!-- Price threshold -->
+  <div class="form-row">
+    <div class="field-header">
+      <label>Alert me when price drops below</label>
+      <span class="tip" data-tip="Per person, for your selected trip type. We check prices 3 times per month across your travel window.">?</span>
+    </div>
+    <div class="threshold-row">
+      <span class="currency-label">CAD $</span>
+      <input id="threshold" type="number" min="1" step="1" placeholder="800" required />
+    </div>
+    <div style="margin-top:10px">
+      <label class="sublabel">My budget is the</label>
+      <div class="toggle-group" id="taxes-group" role="group" aria-label="Price type" style="margin-top:6px">
+        <button type="button" class="toggle-btn active" data-value="1">All-in price <span class="toggle-sub">(taxes &amp; fees included)</span></button>
+        <button type="button" class="toggle-btn" data-value="0">Base fare <span class="toggle-sub">(before taxes)</span></button>
+      </div>
+      <input id="taxes-included" type="hidden" value="1" />
+    </div>
+  </div>
 
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Save &amp; check now</button>
-            <button type="button" id="preview-btn" class="btn btn-ghost" disabled>Preview prices</button>
-          </div>
+  <!-- Book by -->
+  <div class="form-row">
+    <div class="field">
+      <div class="field-header">
+        <label for="book-by">I need to book by</label>
+        <span class="tip" data-tip="Optional deadline. We'll factor this into our booking advice and skip checking after this date.">?</span>
+      </div>
+      <input id="book-by" type="date" style="margin-top:8px" />
+    </div>
+  </div>
 
-          <div id="preview-section" hidden>
-            <div class="preview-header">
-              <span class="preview-title">Current prices</span>
-              <span class="muted preview-hint">Tap a price to use as your threshold</span>
-            </div>
-            <div id="preview-list" class="preview-list"></div>
-          </div>
+  <!-- Actions -->
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Save alert</button>
+  </div>
 
-          <p id="form-error" class="error-msg" hidden></p>
-        </form>
+  <!-- Auto-preview results -->
+  <div id="preview-section" hidden>
+    <div class="preview-header">
+      <span class="preview-title">Current prices</span>
+      <span class="muted preview-hint">Tap a price to use as your threshold</span>
+    </div>
+    <div id="preview-list" class="preview-list"></div>
+  </div>
+
+  <p id="form-error" class="error-msg" hidden></p>
+</form>
       </section>
 
       <!-- Active Alerts -->

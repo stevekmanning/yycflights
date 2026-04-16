@@ -66,6 +66,7 @@ try { db.exec(`ALTER TABLE alerts ADD COLUMN book_by   TEXT`);                  
 try { db.exec(`ALTER TABLE alerts ADD COLUMN stops     INTEGER NOT NULL DEFAULT 0`);       } catch { /* already exists */ }
 try { db.exec(`ALTER TABLE alerts ADD COLUMN trip_type TEXT    NOT NULL DEFAULT 'round'`); } catch { /* already exists */ }
 try { db.exec(`ALTER TABLE alerts ADD COLUMN user_id   TEXT`);                             } catch { /* already exists */ }
+try { db.exec(`ALTER TABLE alerts ADD COLUMN taxes_included INTEGER NOT NULL DEFAULT 1`); } catch { /* already exists */ }
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
@@ -90,8 +91,8 @@ export function getAlert(id, userId = null) {
 
 export function createAlert(data) {
   const stmt = db.prepare(`
-    INSERT INTO alerts (destination, dest_label, month_start, month_end, threshold, email, book_by, stops, trip_type, user_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO alerts (destination, dest_label, month_start, month_end, threshold, email, book_by, stops, trip_type, user_id, taxes_included)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.destination, data.dest_label, data.month_start,
@@ -99,13 +100,14 @@ export function createAlert(data) {
     data.book_by  ?? null,
     data.stops    ?? 0,
     data.trip_type ?? 'round',
-    data.user_id  ?? null
+    data.user_id  ?? null,
+    data.taxes_included ?? 1
   );
   return getAlert(Number(result.lastInsertRowid));
 }
 
 export function updateAlert(id, data) {
-  const allowed = ['destination','dest_label','month_start','month_end','threshold','email','active','book_by','stops','trip_type'];
+  const allowed = ['destination','dest_label','month_start','month_end','threshold','email','active','book_by','stops','trip_type','taxes_included'];
   const fields  = Object.keys(data).filter(k => allowed.includes(k));
   if (!fields.length) return getAlert(id);
   const setClause = fields.map(f => `${f} = ?`).join(', ');
@@ -181,6 +183,19 @@ export function getCheapestOverall(userId = null) {
     ORDER BY fr.price ASC
     LIMIT 1
   `).get();
+}
+
+// Used by scheduler — fetches all active alerts regardless of user
+export function listAllActiveAlerts() {
+  return db.prepare(`
+    SELECT a.*,
+           (SELECT price    FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_price,
+           (SELECT found_at FROM flight_results WHERE alert_id = a.id ORDER BY found_at DESC LIMIT 1) AS latest_found_at,
+           (SELECT MIN(price) FROM flight_results WHERE alert_id = a.id) AS best_price
+    FROM alerts a
+    WHERE a.active = 1
+    ORDER BY a.created_at DESC
+  `).all();
 }
 
 // ── Notification dedup ────────────────────────────────────────────────────────
