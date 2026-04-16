@@ -10,7 +10,7 @@ router.use(requireAuth);
 
 // GET /api/flights/search?dest=YVR&monthStart=6&monthEnd=8
 router.get('/search', async (req, res) => {
-  const { dest, monthStart, monthEnd, stops, tripType } = req.query;
+  const { dest, monthStart, monthEnd, yearStart, yearEnd, stops, tripType } = req.query;
   if (!dest) return res.status(400).json({ error: 'dest is required' });
 
   try {
@@ -18,6 +18,8 @@ router.get('/search', async (req, res) => {
       destination: dest.toUpperCase(),
       monthStart:  Number(monthStart) || 1,
       monthEnd:    Number(monthEnd)   || 12,
+      yearStart:   yearStart ? Number(yearStart) : null,
+      yearEnd:     yearEnd   ? Number(yearEnd)   : null,
       stops:       Number(stops)      || 0,
       tripType:    tripType           || 'round',
     });

@@ -84,6 +84,7 @@ function showApp(user) {
 
   // Boot the app
   populateMonthSelects();
+  setupBookByPicker();
   loadAlerts();
   setupForm();
   setupDrawer();
@@ -93,14 +94,58 @@ function showApp(user) {
 
 // ── Month selects ─────────────────────────────────────────────────────────────
 function populateMonthSelects() {
-  const startEl = document.getElementById('month-start');
-  const endEl   = document.getElementById('month-end');
+  const startEl     = document.getElementById('month-start');
+  const endEl       = document.getElementById('month-end');
+  const yearStartEl = document.getElementById('year-start');
+  const yearEndEl   = document.getElementById('year-end');
+
   MONTHS.forEach((m, i) => {
     startEl.add(new Option(m, i + 1));
     endEl.add(new Option(m, i + 1));
   });
-  startEl.value = 6;
-  endEl.value   = 8;
+
+  // Offer current year + next 2 years
+  const curYear = new Date().getFullYear();
+  for (let y = curYear; y <= curYear + 2; y++) {
+    yearStartEl.add(new Option(y, y));
+    yearEndEl.add(new Option(y, y));
+  }
+
+  // Defaults: June → August of next reasonable year
+  const now    = new Date();
+  const defYear = now.getMonth() >= 5 ? curYear + 1 : curYear; // if past June, default to next year
+  startEl.value     = 6;
+  endEl.value       = 8;
+  yearStartEl.value = defYear;
+  yearEndEl.value   = defYear;
+}
+
+// ── Book-by calendar picker ───────────────────────────────────────────────────
+function setupBookByPicker() {
+  const input    = document.getElementById('book-by');
+  const btn      = document.getElementById('book-by-btn');
+  const clearBtn = document.getElementById('book-by-clear');
+  const label    = document.getElementById('book-by-label');
+
+  btn.addEventListener('click', () => {
+    try { input.showPicker(); } catch { input.click(); }
+  });
+
+  input.addEventListener('change', () => {
+    if (input.value) {
+      label.textContent   = formatDate(input.value);
+      clearBtn.hidden     = false;
+    } else {
+      label.textContent   = 'No deadline';
+      clearBtn.hidden     = true;
+    }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    input.value         = '';
+    label.textContent   = 'No deadline';
+    clearBtn.hidden     = true;
+  });
 }
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
@@ -265,8 +310,8 @@ destInput?.addEventListener('input', () => {
 });
 destInput?.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
 
-// Re-fetch preview when month range changes (if dest already selected)
-['month-start', 'month-end'].forEach(id => {
+// Re-fetch preview when month/year range changes (if dest already selected)
+['month-start', 'month-end', 'year-start', 'year-end'].forEach(id => {
   document.getElementById(id)?.addEventListener('change', () => {
     if (selectedDest) setTimeout(fetchPreview, 300);
   });
@@ -310,6 +355,8 @@ async function fetchPreview() {
   if (!selectedDest) return;
   const monthStart = Number(document.getElementById('month-start').value);
   const monthEnd   = Number(document.getElementById('month-end').value);
+  const yearStart  = Number(document.getElementById('year-start').value);
+  const yearEnd    = Number(document.getElementById('year-end').value);
   const stops      = Number(document.getElementById('stops').value);
   const tripType   = document.getElementById('trip-type').value;
   const section    = document.getElementById('preview-section');
@@ -320,7 +367,7 @@ async function fetchPreview() {
 
   try {
     const results = await api(
-      `/api/flights/search?dest=${encodeURIComponent(selectedDest.iata)}&monthStart=${monthStart}&monthEnd=${monthEnd}&stops=${stops}&tripType=${tripType}`
+      `/api/flights/search?dest=${encodeURIComponent(selectedDest.iata)}&monthStart=${monthStart}&monthEnd=${monthEnd}&yearStart=${yearStart}&yearEnd=${yearEnd}&stops=${stops}&tripType=${tripType}`
     );
     previewResults = results;
     renderPreview(results);
@@ -335,19 +382,23 @@ function renderPreview(results) {
     list.innerHTML = '<p class="muted" style="font-size:.85rem">No flights found for this route/date range.</p>';
     return;
   }
-  list.innerHTML = '<p class="preview-hint-top">Tap a price to use it as your alert threshold:</p>';
+  list.innerHTML = '<p class="preview-hint-top">Tap a price to set it as your alert threshold:</p>';
   results.slice(0, 6).forEach(r => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
+    const chip = document.createElement('div');
     chip.className = 'preview-chip';
     const dep = r.departure_at
       ? new Date(r.departure_at).toLocaleDateString('en-CA', { month:'short', day:'numeric' })
       : '—';
     chip.innerHTML = `
-      <span class="preview-price">$${r.price.toFixed(0)} CAD</span>
-      <span class="preview-meta">${dep} · ${r.airline || 'Various airlines'}</span>
+      <button type="button" class="preview-chip-select">
+        <span class="preview-price">$${r.price.toFixed(0)} CAD</span>
+        <span class="preview-meta">${dep} · ${r.airline || 'Various airlines'}</span>
+      </button>
+      ${r.deep_link
+        ? `<a href="${r.deep_link}" target="_blank" rel="noopener noreferrer" class="preview-book-btn">Book ↗</a>`
+        : ''}
     `;
-    chip.addEventListener('click', () => {
+    chip.querySelector('.preview-chip-select').addEventListener('click', () => {
       document.getElementById('threshold').value = r.price.toFixed(0);
       list.querySelectorAll('.preview-chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');

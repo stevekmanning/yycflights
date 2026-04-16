@@ -31,22 +31,29 @@ function firstMondayOnOrAfter(date) {
 /**
  * Build candidate departure dates: 3 per month (early / mid / late),
  * all landing on Mondays for consistent pricing. Skips past dates.
+ * yearStart/yearEnd: explicit years (optional — auto-calculated if omitted).
  */
-function candidateDates(monthStart, monthEnd) {
+function candidateDates(monthStart, monthEnd, yearStart = null, yearEnd = null) {
   const today = new Date();
-  const year  = today.getFullYear();
+  const curYear = today.getFullYear();
   const dates = [];
 
-  const months = [];
+  // Build list of { month, year } pairs
+  const slots = [];
   if (monthStart <= monthEnd) {
-    for (let m = monthStart; m <= monthEnd; m++) months.push(m);
+    for (let m = monthStart; m <= monthEnd; m++) {
+      const y = yearStart
+        ? (m >= monthStart ? yearStart : yearStart + 1)
+        : (m < today.getMonth() + 1 ? curYear + 1 : curYear);
+      slots.push({ m, y });
+    }
   } else {
-    for (let m = monthStart; m <= 12; m++) months.push(m);
-    for (let m = 1; m <= monthEnd; m++) months.push(m);
+    // Wrapping (e.g. Nov → Feb)
+    for (let m = monthStart; m <= 12; m++) slots.push({ m, y: yearStart || curYear });
+    for (let m = 1; m <= monthEnd; m++) slots.push({ m, y: yearEnd || curYear + 1 });
   }
 
-  for (const m of months) {
-    const y = m < today.getMonth() + 1 ? year + 1 : year;
+  for (const { m, y } of slots) {
     // Early (day 1), mid (day 13), late (day 20)
     const seeds = [new Date(y, m - 1, 1), new Date(y, m - 1, 13), new Date(y, m - 1, 20)];
     for (const seed of seeds) {
@@ -64,9 +71,9 @@ function candidateDates(monthStart, monthEnd) {
  * Queries the first Monday of each month; returns sorted by price ascending.
  * Each result: { price, currency, departure_at, return_at, airline, deep_link, raw_json }
  */
-export async function searchFlights({ destination, monthStart = 1, monthEnd = 12, stops = 0, tripType = 'round' }) {
+export async function searchFlights({ destination, monthStart = 1, monthEnd = 12, yearStart = null, yearEnd = null, stops = 0, tripType = 'round' }) {
   const origin      = process.env.ORIGIN || 'YYC';
-  const departures  = candidateDates(monthStart, monthEnd);
+  const departures  = candidateDates(monthStart, monthEnd, yearStart, yearEnd);
 
   if (departures.length === 0) {
     console.warn('[flights] All candidate dates are in the past — nothing to search');

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>YYC Flights — Find Cheapest Flights from Calgary</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="stylesheet" href="/style.css" />
   <!-- CLERK_SCRIPT -->
 </head>
@@ -92,11 +93,17 @@
     <div class="two-col" style="margin-top:8px">
       <div class="field">
         <label class="sublabel">Earliest month</label>
-        <select id="month-start" required></select>
+        <div class="month-year-wrap">
+          <select id="month-start" required></select>
+          <select id="year-start"></select>
+        </div>
       </div>
       <div class="field">
         <label class="sublabel">Latest month</label>
-        <select id="month-end" required></select>
+        <div class="month-year-wrap">
+          <select id="month-end" required></select>
+          <select id="year-end"></select>
+        </div>
       </div>
     </div>
   </div>
@@ -128,7 +135,14 @@
         <label for="book-by">I need to book by</label>
         <span class="tip" data-tip="Optional deadline. We'll factor this into our booking advice and skip checking after this date.">?</span>
       </div>
-      <input id="book-by" type="date" style="margin-top:8px" />
+      <div class="date-pick-wrap" style="margin-top:8px">
+        <input id="book-by" type="date" class="date-pick-hidden" tabindex="-1" aria-hidden="true" />
+        <button type="button" id="book-by-btn" class="date-pick-btn">
+          <span id="book-by-label">No deadline</span>
+          <span class="date-pick-icon">📅</span>
+        </button>
+        <button type="button" id="book-by-clear" class="date-pick-clear" hidden title="Clear date">✕</button>
+      </div>
     </div>
   </div>
 

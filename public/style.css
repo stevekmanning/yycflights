@@ -395,6 +395,61 @@ select option { background: var(--surface2); }
   flex: 1;
 }
 
+/* ── Month + Year selects ────────────────────────────────── */
+.month-year-wrap {
+  display: flex;
+  gap: 6px;
+}
+.month-year-wrap select:first-child { flex: 1; }
+.month-year-wrap select:last-child  { width: 80px; flex-shrink: 0; }
+
+/* ── Book-by calendar picker ─────────────────────────────── */
+.date-pick-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-pick-hidden {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+.date-pick-btn {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: .95rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: border-color .15s;
+  text-align: left;
+}
+.date-pick-btn:hover { border-color: var(--accent); }
+
+.date-pick-icon { font-size: 1.1rem; opacity: .6; }
+
+.date-pick-clear {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: .85rem;
+  padding: 6px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.date-pick-clear:hover { color: var(--text); border-color: var(--red); }
+
 /* ── Sub-labels ──────────────────────────────────────────── */
 .sublabel {
   font-size: .72rem;
@@ -641,24 +696,53 @@ select option { background: var(--surface2); }
   min-height: 24px;
 }
 
+/* Chip is now a div wrapping a select-button + book link */
 .preview-chip {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
+  display: flex;
+  align-items: stretch;
+  transition: border-color .15s;
+  min-height: 52px;
+  overflow: hidden;
+}
+.preview-chip:hover    { border-color: var(--accent); }
+.preview-chip.selected { border-color: var(--green); background: #16a34a11; }
+
+/* Left side: tap to set threshold */
+.preview-chip-select {
+  flex: 1;
+  background: none;
+  border: none;
   padding: 12px 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  transition: border-color .15s;
   color: var(--text);
   font-family: inherit;
-  min-height: 52px;
+  text-align: left;
   -webkit-tap-highlight-color: transparent;
 }
-.preview-chip:hover    { border-color: var(--accent); }
-.preview-chip.selected { border-color: var(--green); background: #16a34a11; }
+.preview-chip-select:hover { background: rgba(255,255,255,.04); }
+
+/* Right side: Book link */
+.preview-book-btn {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: rgba(59,130,246,.12);
+  border-left: 1px solid var(--border);
+  color: var(--accent2);
+  font-size: .78rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.preview-book-btn:hover { background: rgba(59,130,246,.25); }
 
 .preview-price { font-size: 1.1rem; font-weight: 700; }
 .preview-meta  { font-size: .75rem; color: var(--muted); }
@@ -938,7 +1022,9 @@ select option { background: var(--surface2); }
 
   /* Preview: wrap chips */
   .preview-list { flex-direction: row; flex-wrap: wrap; }
-  .preview-chip { width: auto; flex-direction: column; align-items: flex-start; justify-content: center; }
+  .preview-chip { width: auto; flex-direction: column; }
+  .preview-chip-select { flex-direction: column; align-items: flex-start; }
+  .preview-book-btn { border-left: none; border-top: 1px solid var(--border); padding: 8px 14px; }
   .preview-header { flex-direction: row; align-items: baseline; gap: 12px; }
 
   /* Drawer: slide from right on tablet+ */
