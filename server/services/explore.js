@@ -1,7 +1,15 @@
 // explore.js — Precompute cheapest prices to popular YYC destinations.
 // Runs on a weekly cron; persists lows to destination_baselines.
+//
+// Data source hierarchy:
+//   1. Travelpayouts Data API (free, unlimited, cached) — preferred
+//   2. SerpApi Google Flights (paid, live) — fallback if TP returns nothing
+//
+// TP is fine here because Explore baselines are weekly and "stale by hours"
+// is invisible in browse mode. Live searches + alert checks stay on SerpApi.
 
 import { searchFlights } from './flights.js';
+import { getCheapestFare } from './tpData.js';
 import { upsertBaseline } from '../db.js';
 
 // Curated seed list. Themes: beach | europe | asia | us | canada | adventure
@@ -136,27 +144,54 @@ export async function runExploreSweep({ destinations = SEED_DESTINATIONS, concur
   const yearEnd    = months[months.length - 1].year;
 
   const t0 = Date.now();
-  let ok = 0, fail = 0;
+  let ok = 0, fail = 0, tpHits = 0, serpHits = 0;
 
   await runWithConcurrency(destinations, concurrency, async (dest) => {
     try {
-      const { results } = await searchFlights({
-        destination: dest.iata,
-        monthStart, monthEnd,
-        yearStart, yearEnd,
-        stops:    0,
-        tripType: 'round',
-      });
-      const cheapest = results[0];
-      if (cheapest) {
+      let best = null;
+
+      // Try Travelpayouts Data API first (free, unlimited).
+      if (process.env.TP_API_TOKEN) {
+        try {
+          best = await getCheapestFare({ destination: dest.iata, months });
+          if (best) tpHits++;
+        } catch (tpErr) {
+          console.warn(`[explore] TP Data API error for ${dest.iata}: ${tpErr.message}`);
+        }
+      }
+
+      // Fallback: SerpApi live search. Only fires if TP returned nothing
+      // (empty cache for that route) so we protect quota for real misses.
+      if (!best) {
+        const { results } = await searchFlights({
+          destination: dest.iata,
+          monthStart, monthEnd,
+          yearStart, yearEnd,
+          stops:    0,
+          tripType: 'round',
+        });
+        const cheapest = results[0];
+        if (cheapest) {
+          best = {
+            price:        cheapest.price,
+            airline:      cheapest.airline      || null,
+            departure_at: cheapest.departure_at || null,
+            return_at:    cheapest.return_at    || null,
+            deep_link:    cheapest.deep_link    || null,
+          };
+          serpHits++;
+        }
+      }
+
+      if (best) {
         upsertBaseline({
           iata:         dest.iata,
           dest_label:   dest.label,
           theme:        dest.theme,
-          lowest_price: Math.round(cheapest.price),
-          lowest_date:  (cheapest.departure_at || '').slice(0, 10) || null,
-          airline:      cheapest.airline || null,
-          deep_link:    cheapest.deep_link || null,
+          lowest_price: Math.round(best.price),
+          lowest_date:  (best.departure_at || '').slice(0, 10) || null,
+          airline:      best.airline || null,
+          deep_link:    best.deep_link || null,
         });
         ok++;
       } else {
@@ -169,6 +204,6 @@ export async function runExploreSweep({ destinations = SEED_DESTINATIONS, concur
   });
 
   const seconds = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`[explore] Sweep done — ${ok} ok, ${fail} skipped/failed in ${seconds}s`);
-  return { ok, fail, seconds: Number(seconds) };
+  console.log(`[explore] Sweep done — ${ok} ok (${tpHits} TP, ${serpHits} SerpApi), ${fail} failed, ${seconds}s`);
+  return { ok, fail, tpHits, serpHits, seconds: Number(seconds) };
 }

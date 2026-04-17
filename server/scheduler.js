@@ -28,7 +28,10 @@ function maybeRunCatchupSweep() {
 }
 
 export function startScheduler() {
-  const schedule = process.env.CRON_SCHEDULE || '0 0 */2 * *';
+  // Default: every 12 hours. Prices don't swing enough in 6h to justify
+  // 2× the SerpApi cost, and 12h matches what Hopper / Kayak Price Alerts
+  // actually use. Override with CRON_SCHEDULE if needed.
+  const schedule = process.env.CRON_SCHEDULE || '0 */12 * * *';
 
   if (!cron.validate(schedule)) {
     console.error(`[scheduler] Invalid cron schedule: "${schedule}"`);

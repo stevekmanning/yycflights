@@ -55,7 +55,11 @@
       "Bash(node -e \"const fs=require\\('fs'\\);const css=fs.readFileSync\\('public/style.css','utf8'\\);const o=\\(css.match\\(/\\\\{/g\\)||[]\\).length,c=\\(css.match\\(/\\\\}/g\\)||[]\\).length;console.log\\('CSS braces:',o,'=',c,o===c?'OK':'MISMATCH'\\);\")",
       "Bash(node --check server/lib/affiliate.js)",
       "Bash(node --check server/mailer.js)",
-      "Bash(node -e \"import\\('./server/lib/affiliate.js'\\).then\\(m => console.log\\('tour:', m.tourLink\\('Lisbon'\\), '\\\\nhotel:', m.hotelLink\\('Lisbon','2026-06-10','2026-06-17'\\), '\\\\nwrap:', m.wrapFlightLink\\('https://www.google.com/flights?curr=CAD'\\)\\)\\)\")"
+      "Bash(node -e \"import\\('./server/lib/affiliate.js'\\).then\\(m => console.log\\('tour:', m.tourLink\\('Lisbon'\\), '\\\\nhotel:', m.hotelLink\\('Lisbon','2026-06-10','2026-06-17'\\), '\\\\nwrap:', m.wrapFlightLink\\('https://www.google.com/flights?curr=CAD'\\)\\)\\)\")",
+      "Bash(git rm *)",
+      "Bash(node --check server/services/tpData.js)",
+      "Bash(node --check server/scheduler.js)",
+      "Bash(node -e ' *)"
     ]
   }
 }
